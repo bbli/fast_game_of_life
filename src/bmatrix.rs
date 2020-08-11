@@ -18,7 +18,7 @@ impl DerefMut for BMatrix{
 
 impl BMatrix{
     pub fn new()-> Self{
-        BMatrix(vec![false;GRID_SIZE*GRID_SIZE])
+        BMatrix(vec![false;(GRID_SIZE*GRID_SIZE) as usize])
     }
 }
 
@@ -68,17 +68,17 @@ impl BMatrix{
 impl MatrixView for BMatrix{
     type Item = bool;
     fn at(&self, i:i32, j:i32) -> GameResult<Self::Item>{
-        if i< GRID_SIZE as i32 && j<GRID_SIZE as i32 && i>=0 && j>=0{
+        if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
             //bool is copy type, so moving is fine
-            Ok(self.0[(j*GRID_SIZE as i32 +i) as usize])
+            Ok(self.0[(j*GRID_SIZE +i) as usize])
         }
         else{
             Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
         }
     }
     fn at_mut<'a>(&'a mut self, i:i32, j:i32) -> GameResult<&'a mut Self::Item>{
-        if i< GRID_SIZE as i32 && j<GRID_SIZE as i32 && i>=0 && j>=0{
-            Ok(&mut self.0[(j*GRID_SIZE as i32 +i) as usize])
+        if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
+            Ok(&mut self.0[(j*GRID_SIZE +i) as usize])
         }
         else{
             Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))

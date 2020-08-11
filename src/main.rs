@@ -6,10 +6,10 @@ use ggez::conf;
 use ggez::event;
 use ggez::graphics;
 use ggez::error::GameError;
-use ggez::graphics::{DrawMode, Image, Rect,DrawParam};
+use ggez::graphics::{DrawMode, Image, Rect,DrawParam,BlendMode};
 use ggez::{Context, GameResult};
+use rand::prelude::*;
 
-use nalgebra::geometry::Point2;
 
 mod bmatrix;
 use bmatrix::*;
@@ -26,14 +26,14 @@ const CELL_GAP: f32 = CELL_SIZE as f32 / 6.0;
 
 const NUM_BLOCKS_WIDTH: usize = ((WINDOW_WIDTH as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 1.0) as usize;
 const NUM_BLOCKS_HEIGHT: usize = ((WINDOW_HEIGHT as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 1.0) as usize;
-const INVALID_X: usize = 2*NUM_BLOCKS_WIDTH;
-const INVALID_Y: usize = 2*NUM_BLOCKS_HEIGHT;
 
 // ************  Backend Globals  ************
 // Some code may be reliant on this number being bigger than max(NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT) 
 // Unfortunately, Rust currently does not support compile time if
 //const GRID_SIZE: usize = 20 + std::cmp::max(NUM_BLOCKS_HEIGHT, NUM_BLOCKS_WIDTH);
-const GRID_SIZE: usize = 200;
+const GRID_SIZE: i32 = 120;
+const INVALID_X: i32 = 2*GRID_SIZE;
+const INVALID_Y: i32 = 2*GRID_SIZE;
 
 // ************  Macros  ************
 #[macro_export]
@@ -66,11 +66,13 @@ macro_rules! GREY {
     };
 }
 
+// ************  MAIN CODE  ************   
 
 struct Grid {
     b_matrix: BMatrix,
     //mesh: graphics::Mesh,
     f_subview: FSubview,
+    f_offset: (f32,f32)
 }
 
 //fn new_rect(i: usize, j: usize) -> Rect {
@@ -91,8 +93,8 @@ impl Grid {
         // ************  MESH BUILDER METHOD  ************   
         //let mut mesh = graphics::MeshBuilder::new();
 
-        //for i in 0..NUM_BLOCKS_WIDTH {
-            //for j in 0..NUM_BLOCKS_HEIGHT {
+        //for i in 0..GRID_SIZE {
+            //for j in 0..GRID_SIZE {
                 //mesh.rectangle(DrawMode::fill(), new_rect(i, j), BLACK!());
             //}
         //}
@@ -106,16 +108,43 @@ impl Grid {
         let b_matrix = BMatrix::new();
 
         //let image = Image::from_rgba8(_ctx, CELL_SIZE as u16, CELL_SIZE as u16,&BLACK());
-        let black_sb_handler = create_init_SpriteBatchHandler(CellState::BLACK,ctx);
 
-        let white_sb_handler = create_init_SpriteBatchHandler(CellState::WHITE,ctx);
+        let white_image = Image::solid(ctx,CELL_SIZE,WHITE!()).unwrap();
+        let white_sb_handler = create_init_SpriteBatchHandler(white_image,ctx);
+
+        // this should override the white color set above
+        let black_image = Image::solid(ctx,CELL_SIZE,BLACK!()).unwrap();
+        let black_sb_handler = create_init_SpriteBatchHandler(black_image,ctx);
         
-        Ok(Grid{b_matrix, f_subview: FSubview{black_sb_handler,white_sb_handler}})
+        Ok(Grid{
+            b_matrix, 
+            f_subview: FSubview{black_sb_handler,white_sb_handler},
+            f_offset: (0.0,0.0)
+            }
+        )
     }
 
     fn init_seed(mut self, init_bmatrix: BMatrix) -> Self{
         self.b_matrix = init_bmatrix;
         self
+    }
+
+    fn set_offset(mut self, x:f32, y:f32) -> Self{
+        self.f_offset = (x,y);
+        self
+    }
+
+    fn update_view(&mut self){
+        for j in 0..GRID_SIZE{
+            for i in 0..GRID_SIZE{
+                if self.b_matrix.at(i,j).unwrap(){
+                    self.f_subview.change_to_black(i,j);
+                }
+                else{
+                    self.f_subview.change_to_white(i,j);
+                }
+            }
+        }
     }
 }
 
@@ -130,14 +159,16 @@ trait MatrixView{
 
 impl event::EventHandler for Grid {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        self.b_matrix.next_bmatrix();
+        self.b_matrix = self.b_matrix.next_bmatrix();
+        // use update b_matrix to update view
+        self.update_view();
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, GREY!());
 
-        self.f_subview.draw(ctx)?;
+        self.f_subview.draw(ctx,self.f_offset)?;
 
         graphics::present(ctx)?;
         Ok(())
@@ -148,9 +179,10 @@ pub fn main() -> GameResult {
     // ************  GRID  ************   
     let mut init_bmatrix = BMatrix::new();
     // Blinker pattern
+    let mut rng = rand::thread_rng();
     for j in 0..GRID_SIZE{
         for i in 0..GRID_SIZE{
-            if i == GRID_SIZE /2 && j > GRID_SIZE/2 -3 && j < GRID_SIZE/2 {
+            if rand::random(){
                 *init_bmatrix.at_mut(i as i32,j as i32).unwrap() =true;
             }
         }
@@ -164,7 +196,10 @@ pub fn main() -> GameResult {
 
     // ************  RUNNING  ************   
     let (ref mut ctx, ref mut event_loop) = cb.build()?;
-    let ref mut state = Grid::new(ctx)?.init_seed(init_bmatrix);
+    graphics::set_blend_mode(ctx,BlendMode::Replace);
+    //let origin_point = (GRID_SIZE/2) as f32;
+    let origin_point = 0.0 as f32;
+    let ref mut state = Grid::new(ctx)?.init_seed(init_bmatrix).set_offset(-origin_point,-origin_point);
     event::run(ctx, event_loop, state)
 
 
@@ -240,7 +275,7 @@ mod tests {
     #[test]
     fn test_update_bmatrix_single_cell_become_dead(){
         let mut b_matrix = BMatrix::new();
-        let i = NUM_BLOCKS_WIDTH-1;
+        let i = GRID_SIZE-1;
         let j = 40;
         let i = i as i32;
         let j = j as i32;
@@ -315,9 +350,9 @@ mod tests {
         //// This test is contigent on Grid::new initalizing 
         //// columns first
         //let value = globals.grid.f_subview.at(3,1).unwrap();
-        //let expected_value = 1*NUM_BLOCKS_WIDTH + 3;
+        //let expected_value = 1*GRID_SIZE + 3;
         //println!("Expected value should be: {}. Actual value is: {:?}",expected_value,value);
-        ////assert_eq!(value,1*NUM_BLOCKS_WIDTH+3);
+        ////assert_eq!(value,1*GRID_SIZE+3);
     //}
 
     //#[test]
@@ -336,8 +371,7 @@ mod tests {
         //println!("Value of globals are:");
         //println!("WINDOW_WIDTH: {}",WINDOW_WIDTH);
         //println!("WINDOW_HEIGHT: {}",WINDOW_HEIGHT);
-        //println!("NUM_BLOCKS_WIDTH: {}",NUM_BLOCKS_WIDTH);
-        //println!("NUM_BLOCKS_HEIGHT: {}",NUM_BLOCKS_HEIGHT);
+        //println!("GRID_SIZE: {}",GRID_SIZE);
         //event::run(&mut globals.ctx, &mut globals.event_loop, &mut globals.grid).unwrap();
     //}
 }

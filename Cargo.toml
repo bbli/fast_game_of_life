@@ -4,6 +4,17 @@ version = "0.1.0"
 authors = ["Benson Li <bensonbinbinli@gmail.com>"]
 edition = "2018"
 
+[profile.release]
+opt-level = 3
+debug = 0
+overflow-checks = true
+panic = 'unwind'
+lto = false
+incremental = true
+codegen-units = 256
+rpath = false
+
+
 [profile.dev]
 opt-level = 0
 debug = 0
@@ -30,6 +41,7 @@ rpath = false
 [dependencies]
 ggez="*"
 nalgebra="*"
+rand="*"
 
 #[target.x86_64-unknown-linux-gnu]
 #rustflags = [
