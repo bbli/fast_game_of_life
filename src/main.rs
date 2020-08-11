@@ -7,13 +7,15 @@ use ggez::event;
 use ggez::graphics;
 use ggez::error::GameError;
 use ggez::graphics::{DrawMode, Image, Rect,DrawParam};
-use ggez::graphics::spritebatch;
-use ggez::nalgebra as na;
 use ggez::{Context, GameResult};
 
 use nalgebra::geometry::Point2;
-use std::ops::{Deref,DerefMut};
 
+mod bmatrix;
+use bmatrix::*;
+
+mod fsubview;
+use fsubview::*;
 // ************  Frontend Globals  ************
 const WINDOW_WIDTH: usize = 1920;
 const WINDOW_HEIGHT: usize = 1080;
@@ -34,60 +36,36 @@ const INVALID_Y: usize = 2*NUM_BLOCKS_HEIGHT;
 const GRID_SIZE: usize = 200;
 
 // ************  Macros  ************
+#[macro_export]
 macro_rules! BLACK {
     () => {
         [0.0, 0.0, 0.0, 1.0].into()
     };
 }
+#[macro_export]
 macro_rules! WHITE {
     () => {
         [1.0, 1.0, 1.0, 1.0].into()
     };
 }
 
-fn BLACK() -> [u8; (4*CELL_SIZE*CELL_SIZE) as usize]{
-    let mut array = [0; (4*CELL_SIZE*CELL_SIZE) as usize];
-    for (i,x) in array.iter_mut().enumerate(){
-        if i%4 == 3{
-            *x = 255;
-        }
-    }
-    array
-}
+//fn BLACK() -> [u8; (4*CELL_SIZE*CELL_SIZE) as usize]{
+    //let mut array = [0; (4*CELL_SIZE*CELL_SIZE) as usize];
+    //for (i,x) in array.iter_mut().enumerate(){
+        //if i%4 == 3{
+            //*x = 255;
+        //}
+    //}
+    //array
+//}
 
+#[macro_export]
 macro_rules! GREY {
     () => {
         [0.5, 0.5, 0.5, 1.0].into()
     };
 }
 
-// has to be on heap otherwise stack overflow
-struct BMatrix(Vec<bool>);
-
-// NOTE: These two may or may not be nesscary
-impl Deref for BMatrix{
-    type Target = Vec<bool>;
-    fn deref(&self) -> &Self::Target{
-        &self.0
-    }
-}
-impl DerefMut for BMatrix{
-    fn deref_mut(&mut self) -> &mut Self::Target{
-        &mut self.0
-    }
-}
-
-struct SpriteBatchHandler{
-    spritebatch: spritebatch::SpriteBatch,
-    // we needs this vec b/c SpriteIdx wraps around a private field
-    // so we can't dynamically construct the SpriteIdx ourselves when
-    // we want to use the spritebatch.set method
-    handle_list: Vec<spritebatch::SpriteIdx>
-}
-struct FSubview{
-    black_sb_handler: SpriteBatchHandler,
-    white_sb_handler: SpriteBatchHandler
-}
 
 struct Grid {
     b_matrix: BMatrix,
@@ -95,73 +73,18 @@ struct Grid {
     f_subview: FSubview,
 }
 
-fn new_rect(i: usize, j: usize) -> Rect {
-    let i = i as f32;
-    let j = j as f32;
-    Rect::new(
-        i * (CELL_SIZE as f32 + CELL_GAP),
-        j * (CELL_SIZE as f32 + CELL_GAP),
-        CELL_SIZE as f32,
-        CELL_SIZE as f32,
-    )
-}
+//fn new_rect(i: usize, j: usize) -> Rect {
+    //let i = i as f32;
+    //let j = j as f32;
+    //Rect::new(
+        //i * (CELL_SIZE as f32 + CELL_GAP),
+        //j * (CELL_SIZE as f32 + CELL_GAP),
+        //CELL_SIZE as f32,
+        //CELL_SIZE as f32,
+    //)
+//}
 
-fn new_cell(i:usize, j:usize) -> DrawParam{
-    DrawParam::default()
-        .dest(Point2::new(
-                i as f32 * (CELL_SIZE as f32 + CELL_GAP),
-                j as f32 * (CELL_SIZE as f32 + CELL_GAP)
-                          )
-              )
-}
 
-enum CellState{
-    BLACK,
-    WHITE
-}
-
-fn create_init_SpriteBatchHandler(state: CellState, ctx:&mut Context) -> SpriteBatchHandler{
-        let black = match state{
-            CellState::BLACK => true,
-            CellState::WHITE => false
-        };
-
-        let mut spritebatch;
-        if black{
-            let black_image = Image::solid(ctx,CELL_SIZE,BLACK!()).unwrap();
-            spritebatch = spritebatch::SpriteBatch::new(black_image);
-        }
-        else{
-            let white_image = Image::solid(ctx,CELL_SIZE,WHITE!()).unwrap();
-            spritebatch = spritebatch::SpriteBatch::new(white_image);
-        }
-
-        let mut handle_list = Vec::new();
-        handle_list.reserve(NUM_BLOCKS_HEIGHT*NUM_BLOCKS_WIDTH);
-        // Create x axis first since in graphics first index corresponds with 
-        // the column, not row
-        for j in 0..NUM_BLOCKS_HEIGHT {
-            for i in 0..NUM_BLOCKS_WIDTH{
-                let sprite_idx = if black { spritebatch.add(new_cell(i,j))}
-                                else {spritebatch.add(new_cell(INVALID_X,INVALID_Y))};
-                //if j < 2{
-                    //println!("{:#?}",sprite_idx);
-                //}
-                handle_list.push(sprite_idx);
-                //handle_list.0.push(spritebatch.add(new_cell(i,j)));
-            }
-        }
-        SpriteBatchHandler{
-            spritebatch,
-            handle_list
-        }
-}
-
-impl BMatrix{
-    fn new()-> Self{
-        BMatrix(vec![false;GRID_SIZE*GRID_SIZE])
-    }
-}
 impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
     fn new(ctx: &mut Context) -> GameResult<Grid> {
@@ -190,50 +113,12 @@ impl Grid {
         Ok(Grid{b_matrix, f_subview: FSubview{black_sb_handler,white_sb_handler}})
     }
 
-}
-
-impl BMatrix{
-    fn convert_bool(&self,x:i32,y:i32)-> u32{
-        match self.at(x,y){
-            Ok(value) => if value {1}else {0},
-            //EC: off screen
-            Err(_) => 0
-        }
-    }
-    // since we are using this to survey around, x and y can now be negative
-    fn get_count(&self, i:i32,j:i32)-> u32{
-        let right = self.convert_bool(i+1,j);
-        let down = self.convert_bool(i,j+1);
-        let left = self.convert_bool(i-1,j);
-        let up = self.convert_bool(i,j-1);
-        right + down + left + up
-    }
-
-    fn new_cell_value(&self,i:i32, j:i32, count:u32)-> bool{
-        let state = self.at(i,j).unwrap();
-        match state{
-            //dead transition
-            false => {if count== 3 {true} else {false}}
-            //alive transition
-            true => {if count == 2 || count == 3 {true} else {false}}
-        }
-    }
-
-    fn next_bmatrix(&self)-> BMatrix{
-        let mut new_results = BMatrix::new();
-        for j in 0..GRID_SIZE{
-            for i in 0..GRID_SIZE{
-                let i = i as i32;
-                let j = j as i32;
-
-                let count = self.get_count(i,j);
-                let mut new_value_ref = new_results.at_mut(i,j).unwrap();
-                *new_value_ref = self.new_cell_value(i,j,count);
-            }
-        }
-        new_results
+    fn init_seed(mut self, init_bmatrix: BMatrix) -> Self{
+        self.b_matrix = init_bmatrix;
+        self
     }
 }
+
 
 trait MatrixView{
     /// i and j are with respect to computer graphics convention
@@ -241,38 +126,6 @@ trait MatrixView{
     fn at(&self,i:i32, j:i32)-> GameResult<Self::Item>;
     fn at_mut<'a>(&'a mut self,i:i32, j:i32)-> GameResult<&'a mut Self::Item>;
 }
-impl MatrixView for BMatrix{
-    type Item = bool;
-    fn at(&self, i:i32, j:i32) -> GameResult<Self::Item>{
-        if i< GRID_SIZE as i32 && j<GRID_SIZE as i32 && i>=0 && j>=0{
-            //bool is copy type, so moving is fine
-            Ok(self.0[(j*GRID_SIZE as i32 +i) as usize])
-        }
-        else{
-            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
-        }
-    }
-    fn at_mut<'a>(&'a mut self, i:i32, j:i32) -> GameResult<&'a mut Self::Item>{
-        if i< GRID_SIZE as i32 && j<GRID_SIZE as i32 && i>=0 && j>=0{
-            Ok(&mut self.0[(j*GRID_SIZE as i32 +i) as usize])
-        }
-        else{
-            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
-        }
-    }
-}
-
-//impl MatrixView for FSubview{
-    //type Item= spritebatch::SpriteIdx;
-    //fn at(&self,i:usize, j:usize)-> GameResult<Self::Item>{
-        //if i< NUM_BLOCKS_WIDTH && j < NUM_BLOCKS_HEIGHT{
-            //Ok(self.0[j*NUM_BLOCKS_WIDTH as usize + i])
-        //}
-        //else{
-            //Err(GameError::EventLoopError(format!("IndexError: f_subview's i must be less than {} and j must be less than {}",NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT)))
-        //}
-    //}
-//}
 
 
 impl event::EventHandler for Grid {
@@ -284,9 +137,7 @@ impl event::EventHandler for Grid {
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, GREY!());
 
-        graphics::draw(ctx, &self.f_subview.black_sb_handler.spritebatch , (na::Point2::new(0.0, 0.0),))?;
-
-        graphics::draw(ctx, &self.f_subview.white_sb_handler.spritebatch , (na::Point2::new(0.0, 0.0),))?;
+        self.f_subview.draw(ctx)?;
 
         graphics::present(ctx)?;
         Ok(())
@@ -294,14 +145,29 @@ impl event::EventHandler for Grid {
 }
 
 pub fn main() -> GameResult {
+    // ************  GRID  ************   
+    let mut init_bmatrix = BMatrix::new();
+    // Blinker pattern
+    for j in 0..GRID_SIZE{
+        for i in 0..GRID_SIZE{
+            if i == GRID_SIZE /2 && j > GRID_SIZE/2 -3 && j < GRID_SIZE/2 {
+                *init_bmatrix.at_mut(i as i32,j as i32).unwrap() =true;
+            }
+        }
+    }
+    // ************  GGEZ  ************   
     let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
         conf::WindowMode::default()
             .resizable(true)
             .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
     );
+
+    // ************  RUNNING  ************   
     let (ref mut ctx, ref mut event_loop) = cb.build()?;
-    let state = &mut Grid::new(ctx)?;
+    let ref mut state = Grid::new(ctx)?.init_seed(init_bmatrix);
     event::run(ctx, event_loop, state)
+
+
 }
 #[cfg(test)]
 mod tests {
@@ -327,22 +193,22 @@ mod tests {
         Ok(Globals{ctx,event_loop,grid})
     }
     // ************  ACTUAL TESTING  ************   
-    #[test]
-    fn test_image_black_macro(){
-        let array = crate::BLACK();
-        for (i,x) in array.iter().enumerate(){
-            if i% 4 == 3{
-                assert_eq!(x,&255);
-            }
-            else{
-                assert_eq!(x,&0);
-            }
+    //#[test]
+    //fn test_image_black_macro(){
+        //let array = crate::BLACK();
+        //for (i,x) in array.iter().enumerate(){
+            //if i% 4 == 3{
+                //assert_eq!(x,&255);
+            //}
+            //else{
+                //assert_eq!(x,&0);
+            //}
 
-            if i > 20{
-                break;
-            }
-        }
-    }
+            //if i > 20{
+                //break;
+            //}
+        //}
+    //}
 
     #[test]
     fn test_BMatrix_index_on_subview(){
