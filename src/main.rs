@@ -12,6 +12,7 @@ use ggez::nalgebra as na;
 use ggez::{Context, GameResult};
 
 use nalgebra::geometry::Point2;
+use std::ops::{Deref,DerefMut};
 
 // ************  Frontend Globals  ************
 const WINDOW_WIDTH: usize = 1920;
@@ -63,6 +64,19 @@ macro_rules! GREY {
 // has to be on heap otherwise stack overflow
 struct BMatrix(Vec<bool>);
 
+// NOTE: These two may or may not be nesscary
+impl Deref for BMatrix{
+    type Target = Vec<bool>;
+    fn deref(&self) -> &Self::Target{
+        &self.0
+    }
+}
+impl DerefMut for BMatrix{
+    fn deref_mut(&mut self) -> &mut Self::Target{
+        &mut self.0
+    }
+}
+
 struct SpriteBatchHandler{
     spritebatch: spritebatch::SpriteBatch,
     // we needs this vec b/c SpriteIdx wraps around a private field
@@ -78,7 +92,7 @@ struct FSubview{
 struct Grid {
     b_matrix: BMatrix,
     //mesh: graphics::Mesh,
-    f_subview: FSubview 
+    f_subview: FSubview,
 }
 
 fn new_rect(i: usize, j: usize) -> Rect {
@@ -143,6 +157,11 @@ fn create_init_SpriteBatchHandler(state: CellState, ctx:&mut Context) -> SpriteB
         }
 }
 
+impl BMatrix{
+    fn new()-> Self{
+        BMatrix(vec![false;GRID_SIZE*GRID_SIZE])
+    }
+}
 impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
     fn new(ctx: &mut Context) -> GameResult<Grid> {
@@ -161,7 +180,7 @@ impl Grid {
         //})
 
         // ************  SPRITE METHOD  ************   
-        let b_matrix = BMatrix(vec![false;GRID_SIZE*GRID_SIZE]);
+        let b_matrix = BMatrix::new();
 
         //let image = Image::from_rgba8(_ctx, CELL_SIZE as u16, CELL_SIZE as u16,&BLACK());
         let black_sb_handler = create_init_SpriteBatchHandler(CellState::BLACK,ctx);
@@ -170,19 +189,72 @@ impl Grid {
         
         Ok(Grid{b_matrix, f_subview: FSubview{black_sb_handler,white_sb_handler}})
     }
+
 }
 
+impl BMatrix{
+    fn convert_bool(&self,x:i32,y:i32)-> u32{
+        match self.at(x,y){
+            Ok(value) => if value {1}else {0},
+            //EC: off screen
+            Err(_) => 0
+        }
+    }
+    // since we are using this to survey around, x and y can now be negative
+    fn get_count(&self, i:i32,j:i32)-> u32{
+        let right = self.convert_bool(i+1,j);
+        let down = self.convert_bool(i,j+1);
+        let left = self.convert_bool(i-1,j);
+        let up = self.convert_bool(i,j-1);
+        right + down + left + up
+    }
+
+    fn new_cell_value(&self,i:i32, j:i32, count:u32)-> bool{
+        let state = self.at(i,j).unwrap();
+        match state{
+            //dead transition
+            false => {if count== 3 {true} else {false}}
+            //alive transition
+            true => {if count == 2 || count == 3 {true} else {false}}
+        }
+    }
+
+    fn next_bmatrix(&self)-> BMatrix{
+        let mut new_results = BMatrix::new();
+        for j in 0..GRID_SIZE{
+            for i in 0..GRID_SIZE{
+                let i = i as i32;
+                let j = j as i32;
+
+                let count = self.get_count(i,j);
+                let mut new_value_ref = new_results.at_mut(i,j).unwrap();
+                *new_value_ref = self.new_cell_value(i,j,count);
+            }
+        }
+        new_results
+    }
+}
 
 trait MatrixView{
     /// i and j are with respect to computer graphics convention
     type Item;
-    fn at(&self,i:usize, j:usize)-> GameResult<Self::Item>;
+    fn at(&self,i:i32, j:i32)-> GameResult<Self::Item>;
+    fn at_mut<'a>(&'a mut self,i:i32, j:i32)-> GameResult<&'a mut Self::Item>;
 }
 impl MatrixView for BMatrix{
     type Item = bool;
-    fn at(&self, i:usize, j:usize) -> GameResult<Self::Item>{
-        if i< GRID_SIZE && j<GRID_SIZE{
-            Ok(self.0[j*GRID_SIZE+i])
+    fn at(&self, i:i32, j:i32) -> GameResult<Self::Item>{
+        if i< GRID_SIZE as i32 && j<GRID_SIZE as i32 && i>=0 && j>=0{
+            //bool is copy type, so moving is fine
+            Ok(self.0[(j*GRID_SIZE as i32 +i) as usize])
+        }
+        else{
+            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
+        }
+    }
+    fn at_mut<'a>(&'a mut self, i:i32, j:i32) -> GameResult<&'a mut Self::Item>{
+        if i< GRID_SIZE as i32 && j<GRID_SIZE as i32 && i>=0 && j>=0{
+            Ok(&mut self.0[(j*GRID_SIZE as i32 +i) as usize])
         }
         else{
             Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
@@ -202,8 +274,10 @@ impl MatrixView for BMatrix{
     //}
 //}
 
+
 impl event::EventHandler for Grid {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        self.b_matrix.next_bmatrix();
         Ok(())
     }
 
@@ -284,17 +358,89 @@ mod tests {
         let value = grid.b_matrix.at(1,1).unwrap();
         assert_eq!(value,false);
         // Check last point: 
-        let value = grid.b_matrix.at(GRID_SIZE-1,GRID_SIZE-1).unwrap();
+        let value = grid.b_matrix.at((GRID_SIZE-1) as i32,(GRID_SIZE-1) as i32).unwrap();
         assert_eq!(value,false);
     }
 
     #[should_panic]
     #[test]
     fn test_BMatrix_at_outOfBounds(){
+        println!("HI!!!!!!");
         let globals = setup().unwrap();
 
-        let value = globals.grid.b_matrix.at(2*GRID_SIZE,0).unwrap();
+        let value = globals.grid.b_matrix.at((2*GRID_SIZE) as i32,0).unwrap();
     }
+
+    #[test]
+    fn test_update_bmatrix_single_cell_become_dead(){
+        let mut b_matrix = BMatrix::new();
+        let i = NUM_BLOCKS_WIDTH-1;
+        let j = 40;
+        let i = i as i32;
+        let j = j as i32;
+
+        *b_matrix.at_mut(i,j).unwrap() = true;
+        assert_eq!(b_matrix.at(i,j).unwrap(),true);
+        let new_matrix = b_matrix.next_bmatrix();
+
+        assert_eq!(new_matrix.at(i,j).unwrap(),false);
+    }
+
+    #[test]
+    fn test_update_bmatrix_single_cell_become_alive(){
+        let mut b_matrix = BMatrix::new();
+        let i = 40;
+        let j = 40;
+        *b_matrix.at_mut(i+1,j).unwrap() = true;
+        *b_matrix.at_mut(i,j+1).unwrap() = true;
+        *b_matrix.at_mut(i-1,j).unwrap() = true;
+
+        let next_bmatrix = b_matrix.next_bmatrix();
+
+        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
+        assert_eq!(next_bmatrix.at(i+1,j).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i,j+1).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
+    }
+
+    #[test]
+    fn test_update_bmatrix_edge_cell_become_alive(){
+        let mut b_matrix = BMatrix::new();
+        let i = GRID_SIZE-1;
+        let j = 40;
+        let i = i as i32;
+        let j = j as i32;
+        *b_matrix.at_mut(i,j+1).unwrap() = true;
+        *b_matrix.at_mut(i-1,j).unwrap() = true;
+        *b_matrix.at_mut(i,j-1).unwrap() = true;
+
+        let next_bmatrix = b_matrix.next_bmatrix();
+
+        assert_eq!(next_bmatrix.at(i,j+1).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i,j-1).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
+    }
+
+    #[test]
+    fn test_update_bmatrix_corner_cell_stays_alive(){
+        let mut b_matrix = BMatrix::new();
+        let i = GRID_SIZE-1;
+        let j = GRID_SIZE-1;
+        let i = i as i32;
+        let j = j as i32;
+
+        *b_matrix.at_mut(i,j-1).unwrap() = true;
+        *b_matrix.at_mut(i-1,j).unwrap() = true;
+        *b_matrix.at_mut(i,j).unwrap() = true;
+
+        let next_bmatrix = b_matrix.next_bmatrix();
+
+        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
+        assert_eq!(next_bmatrix.at(i,j-1).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
+    }
+
 
     //#[test]
     //fn test_FSubview_at(){
@@ -309,7 +455,6 @@ mod tests {
     //}
 
     //#[test]
-    //#[ignore]
     //fn test_draw_off_grid_doesnt_panic(){
         //let mut globals = setup().unwrap();
 

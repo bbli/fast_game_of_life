@@ -7,6 +7,7 @@ edition = "2018"
 [profile.dev]
 opt-level = 0
 debug = 0
+debug-assertions=true
 overflow-checks = true
 panic = 'unwind'
 lto = false
@@ -14,6 +15,17 @@ incremental = true
 codegen-units = 256
 rpath = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[profile.test]
+opt-level = 0
+debug = true
+debug-assertions=true
+overflow-checks = true
+panic = 'unwind'
+lto = false
+incremental = true
+codegen-units = 256
+rpath = false
 
 [dependencies]
 ggez="*"
