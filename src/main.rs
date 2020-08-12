@@ -20,17 +20,29 @@ use fsubview::*;
 const WINDOW_WIDTH: usize = 1920;
 const WINDOW_HEIGHT: usize = 1080;
 
-const CELL_SIZE: u16 = 20;
+const CELL_SIZE: f32 = 20.0;
 //any smaller and may not print out correctly
-const CELL_GAP: f32 = CELL_SIZE as f32 / 6.0;
+const CELL_GAP: f32 = CELL_SIZE / 6.0;
 
-const NUM_BLOCKS_WIDTH: usize = ((WINDOW_WIDTH as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 1.0) as usize;
-const NUM_BLOCKS_HEIGHT: usize = ((WINDOW_HEIGHT as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 1.0) as usize;
+// Base off exact formula below, +3/4 will be safe
+const NUM_BLOCKS_WIDTH2: usize = ((WINDOW_WIDTH as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as usize;
+const NUM_BLOCKS_HEIGHT2: usize = ((WINDOW_HEIGHT as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as usize;
+
+//fn get_worst_case_num_of_blocks(side: usize) -> usize{
+    //let distance_left_to_pack_on_one_side: f32 = side as f32/2.0 - CELL_SIZE as f32/2.0;
+
+    //let mut num_of_blocks_that_fit = (distance_left_to_pack_on_one_side/(CELL_SIZE as f32+CELL_GAP)) as i32;
+    //num_of_blocks_that_fit += 1;
+
+    //(1+ 2*num_of_blocks_that_fit) as usize
+//}
+
+
 
 // ************  Backend Globals  ************
 // Some code may be reliant on this number being bigger than max(NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT) 
 // Unfortunately, Rust currently does not support compile time if
-//const GRID_SIZE: usize = 20 + std::cmp::max(NUM_BLOCKS_HEIGHT, NUM_BLOCKS_WIDTH);
+//const GRID_SIZE: usize >= std::cmp::max(NUM_BLOCKS_HEIGHT, NUM_BLOCKS_WIDTH);
 const GRID_SIZE: i32 = 120;
 const INVALID_X: i32 = 2*GRID_SIZE;
 const INVALID_Y: i32 = 2*GRID_SIZE;
@@ -109,11 +121,11 @@ impl Grid {
 
         //let image = Image::from_rgba8(_ctx, CELL_SIZE as u16, CELL_SIZE as u16,&BLACK());
 
-        let white_image = Image::solid(ctx,CELL_SIZE,WHITE!()).unwrap();
+        let white_image = Image::solid(ctx,CELL_SIZE as u16,WHITE!()).unwrap();
         let white_sb_handler = create_init_SpriteBatchHandler(white_image,ctx);
 
         // this should override the white color set above
-        let black_image = Image::solid(ctx,CELL_SIZE,BLACK!()).unwrap();
+        let black_image = Image::solid(ctx,CELL_SIZE as u16,BLACK!()).unwrap();
         let black_sb_handler = create_init_SpriteBatchHandler(black_image,ctx);
         
         Ok(Grid{
@@ -148,6 +160,73 @@ impl Grid {
     }
 }
 
+fn get_base_index_right(x:f32)->i32{
+    empty_moves_forward(x)
+}
+
+fn get_base_index_bottom(y:f32)->i32{
+    empty_moves_forward(y)
+}
+
+fn get_base_index_top(y:f32)->i32{
+    empty_moves_back(y)
+}
+
+fn get_base_index_left(x:f32)->i32{
+    empty_moves_back(x)
+}
+
+
+fn empty_moves_back(z:f32)->i32{
+    // num_sections gives the number of complete CELL_SIZE+CELL_GAP sections
+    // -1 since it starts from 1(instead of 0 like the matrices)
+    let num_sections = (z/(CELL_SIZE+CELL_GAP)).ceil();
+    if num_sections == 0.0{
+        num_sections as i32
+    }
+    else{
+        num_sections as i32 -1
+    }
+}
+
+// EC: 0,0
+// PRECONDITON: z is positive
+//width>0 so we don't need to account for 0 edge case like in empty_moves_back
+fn empty_moves_forward(z:f32) -> i32{
+    // ************  Float Land  ************   
+    let num_sections = (z/(CELL_SIZE+CELL_GAP)).ceil();
+    let rightmost_point = num_sections*(CELL_SIZE+CELL_GAP);
+    let threshold = rightmost_point - CELL_GAP;
+
+    // ************  Adjusting back to Index Land  ************   
+     //means we are currently inside a box
+     //so num_sections is the "correct" idx
+    if threshold - CELL_GAP > z{
+        (num_sections - 1.0) as i32
+    }
+    // we need to extend down to next cell
+    else{
+        num_sections as i32
+    }
+}
+
+
+// now draw from base_index_top -> base_index_bottom, inclusive
+
+// finally shift top leftmost corner by distance
+//fn get_top_leftmost_point_of_base_cell(i:i32,j:i32)->f32{
+    //let y = j as f32*(CELL_SIZE+CELL_GAP);
+    //let x = i as f32
+//}
+fn get_distance_to_top(y_top:f32,top_of_upper_bound_cell:f32)->GameResult<f32>{
+    if y_top>top_of_upper_bound_cell{
+        Ok(y_top-top_of_upper_bound_cell)
+    }
+    else{
+        Err(GameError::EventLoopError("Top bounding cell should be above current offset".to_string()))
+    }
+}
+
 
 trait MatrixView{
     /// i and j are with respect to computer graphics convention
@@ -176,6 +255,13 @@ impl event::EventHandler for Grid {
 }
 
 pub fn main() -> GameResult {
+    let NUM_BLOCKS_WIDTH:usize = get_worst_case_num_of_blocks(WINDOW_WIDTH);
+    let NUM_BLOCKS_HEIGHT:usize = get_worst_case_num_of_blocks(WINDOW_HEIGHT);
+    println!("NUM_BLOCKS_WIDTH: {}",NUM_BLOCKS_WIDTH);
+    println!("NUM_BLOCKS_HEIGHT: {}",NUM_BLOCKS_HEIGHT);
+    println!("NUM_BLOCKS_WIDTH2: {}",NUM_BLOCKS_WIDTH2);
+    println!("NUM_BLOCKS_HEIGHT2: {}",NUM_BLOCKS_HEIGHT2);
+
     // ************  GRID  ************   
     let mut init_bmatrix = BMatrix::new();
     // Blinker pattern
@@ -342,6 +428,41 @@ mod tests {
         assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
     }
 
+    #[test]
+    fn test_bounding_space_vertical(){
+        let height = CELL_SIZE/2.0+CELL_GAP/2.0;
+        let offset_y = (2.0*(CELL_SIZE+CELL_GAP)) - CELL_GAP/2.0;
+        // so from above, we know ending should be inside a box
+        let top_idx = get_base_index_top(offset_y);
+        let bottom_idx = get_base_index_bottom(offset_y+height);
+        assert_eq!(top_idx,1);
+        assert_eq!(bottom_idx,2);
+    }
+
+    #[test]
+    fn test_bounding_space_horizontal(){
+        let width = CELL_SIZE+CELL_GAP+CELL_SIZE/2.0+CELL_GAP/2.0;
+        let offset_x = (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
+        // so from above, we know ending should be on empty space
+        let left_idx = get_base_index_left(offset_x);
+        let right_idx = get_base_index_bottom(offset_x+width);
+        assert_eq!(left_idx,1);
+        assert_eq!(right_idx,3);
+    }
+
+    #[test]
+    fn test_bounding_space_edge_case_at_origin(){
+        let width = 2.0*(CELL_SIZE+CELL_GAP)+CELL_SIZE/2.0;
+        // so from above, we know ending should be on empty space
+        let left_idx = get_base_index_left(0.0);
+        let right_idx = get_base_index_bottom(0.0+width);
+        assert_eq!(left_idx,0);
+        assert_eq!(right_idx,2);
+    }
+
+    //#[test]
+    //fn test_bounding_space_edge_case_at_max_offset(){
+    //}
 
     //#[test]
     //fn test_FSubview_at(){
