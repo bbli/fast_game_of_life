@@ -17,7 +17,8 @@ rpath = false
 
 [profile.dev]
 opt-level = 0
-debug = 0
+# turn on only you need to debug, as cargo run will use this profile
+debug = true
 debug-assertions=true
 overflow-checks = true
 panic = 'unwind'
@@ -42,6 +43,7 @@ rpath = false
 ggez="*"
 nalgebra="*"
 rand="*"
+assert_approx_eq="*"
 
 #[target.x86_64-unknown-linux-gnu]
 #rustflags = [

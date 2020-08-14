@@ -10,6 +10,7 @@ use ggez::graphics::{DrawMode, Image, Rect,DrawParam,BlendMode};
 use ggez::{Context, GameResult};
 use rand::prelude::*;
 
+//use std::{thread,time};
 
 mod bmatrix;
 use bmatrix::*;
@@ -24,28 +25,31 @@ const CELL_SIZE: f32 = 20.0;
 //any smaller and may not print out correctly
 const CELL_GAP: f32 = CELL_SIZE / 6.0;
 
-// Base off exact formula below, +3/4 will be safe
-const NUM_BLOCKS_WIDTH2: usize = ((WINDOW_WIDTH as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as usize;
-const NUM_BLOCKS_HEIGHT2: usize = ((WINDOW_HEIGHT as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as usize;
-
-//fn get_worst_case_num_of_blocks(side: usize) -> usize{
+// ************  Backend Globals  ************
+// 1. Some code may be reliant(update_view) on this number being bigger than max(NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT), which is an approximation to worst case scenario, whose function is also provided below
+// ```
+// fn get_worst_case_num_of_blocks(side: usize) -> usize{
     //let distance_left_to_pack_on_one_side: f32 = side as f32/2.0 - CELL_SIZE as f32/2.0;
 
     //let mut num_of_blocks_that_fit = (distance_left_to_pack_on_one_side/(CELL_SIZE as f32+CELL_GAP)) as i32;
     //num_of_blocks_that_fit += 1;
 
     //(1+ 2*num_of_blocks_that_fit) as usize
-//}
+    //}
+// ```
 
+// 2. Base off exact formula above, +3/4 will be safe
+//const NUM_BLOCKS_WIDTH: usize = ((WINDOW_WIDTH as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as usize;
+//const NUM_BLOCKS_HEIGHT: usize = ((WINDOW_HEIGHT as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as usize;
 
-
-// ************  Backend Globals  ************
-// Some code may be reliant on this number being bigger than max(NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT) 
-// Unfortunately, Rust currently does not support compile time if
+// 3. Unfortunately, Rust currently does not support compile time if,
+// so just hardcode a number for the grid size
 //const GRID_SIZE: usize >= std::cmp::max(NUM_BLOCKS_HEIGHT, NUM_BLOCKS_WIDTH);
-const GRID_SIZE: i32 = 120;
-const INVALID_X: i32 = 2*GRID_SIZE;
-const INVALID_Y: i32 = 2*GRID_SIZE;
+const GRID_SIZE: i32 = 200;
+
+
+//const INVALID_X: i32 = 2*GRID_SIZE;
+//const INVALID_Y: i32 = 2*GRID_SIZE;
 
 // ************  Macros  ************
 #[macro_export]
@@ -80,11 +84,15 @@ macro_rules! GREY {
 
 // ************  MAIN CODE  ************   
 
+pub struct Point{
+    x: f32,
+    y: f32
+}
 struct Grid {
     b_matrix: BMatrix,
     //mesh: graphics::Mesh,
     f_subview: FSubview,
-    f_offset: (f32,f32)
+    f_offset: Point
 }
 
 //fn new_rect(i: usize, j: usize) -> Rect {
@@ -130,8 +138,8 @@ impl Grid {
         
         Ok(Grid{
             b_matrix, 
-            f_subview: FSubview{black_sb_handler,white_sb_handler},
-            f_offset: (0.0,0.0)
+            f_subview: FSubview{black_sb_handler,white_sb_handler,relative_offset: Point{x:0.0,y:0.0}},
+            f_offset: Point{x:0.0,y:0.0}
             }
         )
     }
@@ -142,21 +150,49 @@ impl Grid {
     }
 
     fn set_offset(mut self, x:f32, y:f32) -> Self{
-        self.f_offset = (x,y);
+        self.f_offset.x = x;
+        self.f_offset.y = y;
         self
     }
 
-    fn update_view(&mut self){
-        for j in 0..GRID_SIZE{
-            for i in 0..GRID_SIZE{
-                if self.b_matrix.at(i,j).unwrap(){
-                    self.f_subview.change_to_black(i,j);
+    fn update_view(&mut self)->GameResult{
+        // 1. get bounding boxes
+        // TODO: remove divide by 2 once testing of offset/user moving is complete
+        let top_idx = get_base_index_top(self.f_offset.y);
+        //let bottom_idx = get_base_index_bottom(self.f_offset.y+WINDOW_HEIGHT as f32/2.0);
+        let bottom_idx = get_base_index_bottom(self.f_offset.y+WINDOW_HEIGHT as f32);
+
+        let left_idx = get_base_index_left(self.f_offset.x);
+        let right_idx = get_base_index_right(self.f_offset.x+WINDOW_WIDTH as f32);
+
+        //println!("Top idx: {}",top_idx);
+        //println!("Bottom idx: {}",bottom_idx);
+        println!("Left idx: {}",left_idx);
+        println!("right idx: {}",right_idx);
+
+        // 2. now draw from base_index_top -> base_index_bottom, inclusive
+        self.f_subview.clear();
+        for j in top_idx..bottom_idx+1{
+            let relative_j = j - top_idx;
+            for i in left_idx..right_idx+1{
+                let relative_i = i - left_idx;
+
+                if self.b_matrix.at(i,j)?{
+                    //self.f_subview.change_to_white(i,j);
+                    self.f_subview.add_to_white(relative_i,relative_j);
                 }
                 else{
-                    self.f_subview.change_to_white(i,j);
+                    //self.f_subview.change_to_black(i,j);
+                    self.f_subview.add_to_black(relative_i,relative_j);
                 }
             }
         }
+        // 3. finally define new relative offset
+        // aka relative to the box at (left_idx,top_idx)
+        let rel_offset_y = get_distance_to_top(self.f_offset.y,top_idx)?;
+        let rel_offset_x = get_distance_to_left(self.f_offset.x,left_idx)?;
+        self.f_subview.update_relative_offset(rel_offset_x,rel_offset_y);
+        Ok(())
     }
 }
 
@@ -201,7 +237,7 @@ fn empty_moves_forward(z:f32) -> i32{
     // ************  Adjusting back to Index Land  ************   
      //means we are currently inside a box
      //so num_sections is the "correct" idx
-    if threshold - CELL_GAP > z{
+    if threshold >= z{
         (num_sections - 1.0) as i32
     }
     // we need to extend down to next cell
@@ -210,23 +246,38 @@ fn empty_moves_forward(z:f32) -> i32{
     }
 }
 
-
-// now draw from base_index_top -> base_index_bottom, inclusive
-
-// finally shift top leftmost corner by distance
-//fn get_top_leftmost_point_of_base_cell(i:i32,j:i32)->f32{
-    //let y = j as f32*(CELL_SIZE+CELL_GAP);
-    //let x = i as f32
-//}
-fn get_distance_to_top(y_top:f32,top_of_upper_bound_cell:f32)->GameResult<f32>{
-    if y_top>top_of_upper_bound_cell{
-        Ok(y_top-top_of_upper_bound_cell)
+fn get_top_of_cell(j:i32)->f32{
+    j as f32*(CELL_SIZE+CELL_GAP)
+}
+fn get_distance_to_top(offset_y:f32,top_idx:i32)->GameResult<f32>{
+    let top_of_upper_bound_cell = get_top_of_cell(top_idx);
+    if offset_y >= top_of_upper_bound_cell{
+        Ok(offset_y-top_of_upper_bound_cell)
     }
     else{
         Err(GameError::EventLoopError("Top bounding cell should be above current offset".to_string()))
     }
 }
+fn get_left_of_cell(i:i32)->f32{
+    i as f32*(CELL_SIZE+CELL_GAP)
+}
+fn get_distance_to_left(offset_x:f32,left_idx:i32)->GameResult<f32>{
+    let left_of_upper_bound_cell = get_left_of_cell(left_idx);
+    if offset_x >= left_of_upper_bound_cell{
+        Ok(offset_x-left_of_upper_bound_cell)
+    }
+    else{
+        Err(GameError::EventLoopError("Left bounding cell should be to left of current offset".to_string()))
+    }
+}
 
+fn get_max_offset_x()-> f32{
+    (GRID_SIZE-1) as f32*(CELL_SIZE+CELL_GAP)+ CELL_SIZE - WINDOW_WIDTH as f32
+}
+
+fn get_max_offset_y()-> f32{
+    (GRID_SIZE-1) as f32*(CELL_SIZE+CELL_GAP)+ CELL_SIZE - WINDOW_HEIGHT as f32
+}
 
 trait MatrixView{
     /// i and j are with respect to computer graphics convention
@@ -238,16 +289,18 @@ trait MatrixView{
 
 impl event::EventHandler for Grid {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        self.b_matrix = self.b_matrix.next_bmatrix();
+        //let ten_seconds = time::Duration::from_secs(10);
+        //thread::sleep(ten_seconds);
+        //self.b_matrix = self.b_matrix.next_bmatrix();
         // use update b_matrix to update view
-        self.update_view();
+        self.update_view()?;
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, GREY!());
 
-        self.f_subview.draw(ctx,self.f_offset)?;
+        self.f_subview.draw(ctx)?;
 
         graphics::present(ctx)?;
         Ok(())
@@ -255,12 +308,12 @@ impl event::EventHandler for Grid {
 }
 
 pub fn main() -> GameResult {
-    let NUM_BLOCKS_WIDTH:usize = get_worst_case_num_of_blocks(WINDOW_WIDTH);
-    let NUM_BLOCKS_HEIGHT:usize = get_worst_case_num_of_blocks(WINDOW_HEIGHT);
-    println!("NUM_BLOCKS_WIDTH: {}",NUM_BLOCKS_WIDTH);
-    println!("NUM_BLOCKS_HEIGHT: {}",NUM_BLOCKS_HEIGHT);
-    println!("NUM_BLOCKS_WIDTH2: {}",NUM_BLOCKS_WIDTH2);
-    println!("NUM_BLOCKS_HEIGHT2: {}",NUM_BLOCKS_HEIGHT2);
+    //let NUM_BLOCKS_WIDTH:usize = get_worst_case_num_of_blocks(WINDOW_WIDTH);
+    //let NUM_BLOCKS_HEIGHT:usize = get_worst_case_num_of_blocks(WINDOW_HEIGHT);
+    //println!("NUM_BLOCKS_WIDTH: {}",NUM_BLOCKS_WIDTH);
+    //println!("NUM_BLOCKS_HEIGHT: {}",NUM_BLOCKS_HEIGHT);
+    //println!("NUM_BLOCKS_WIDTH2: {}",NUM_BLOCKS_WIDTH2);
+    //println!("NUM_BLOCKS_HEIGHT2: {}",NUM_BLOCKS_HEIGHT2);
 
     // ************  GRID  ************   
     let mut init_bmatrix = BMatrix::new();
@@ -285,10 +338,8 @@ pub fn main() -> GameResult {
     graphics::set_blend_mode(ctx,BlendMode::Replace);
     //let origin_point = (GRID_SIZE/2) as f32;
     let origin_point = 0.0 as f32;
-    let ref mut state = Grid::new(ctx)?.init_seed(init_bmatrix).set_offset(-origin_point,-origin_point);
+    let ref mut state = Grid::new(ctx)?.init_seed(init_bmatrix).set_offset(origin_point,origin_point);
     event::run(ctx, event_loop, state)
-
-
 }
 #[cfg(test)]
 mod tests {
@@ -297,6 +348,8 @@ mod tests {
     use ggez::{Context, GameResult};
     use ggez::event::EventsLoop;
     use super::*;
+    use assert_approx_eq::assert_approx_eq;
+
     struct Globals{
         ctx: Context,
         event_loop: EventsLoop,
@@ -432,7 +485,7 @@ mod tests {
     fn test_bounding_space_vertical(){
         let height = CELL_SIZE/2.0+CELL_GAP/2.0;
         let offset_y = (2.0*(CELL_SIZE+CELL_GAP)) - CELL_GAP/2.0;
-        // so from above, we know ending should be inside a box
+        // so from variables above, we know ending should be on empty space
         let top_idx = get_base_index_top(offset_y);
         let bottom_idx = get_base_index_bottom(offset_y+height);
         assert_eq!(top_idx,1);
@@ -443,26 +496,140 @@ mod tests {
     fn test_bounding_space_horizontal(){
         let width = CELL_SIZE+CELL_GAP+CELL_SIZE/2.0+CELL_GAP/2.0;
         let offset_x = (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
-        // so from above, we know ending should be on empty space
+        // so from variables above, we know ending should be on empty space
         let left_idx = get_base_index_left(offset_x);
-        let right_idx = get_base_index_bottom(offset_x+width);
+        let right_idx = get_base_index_right(offset_x+width);
         assert_eq!(left_idx,1);
         assert_eq!(right_idx,3);
     }
 
     #[test]
-    fn test_bounding_space_edge_case_at_origin(){
+    fn test_bounding_space_edge_case_at_origin_x(){
         let width = 2.0*(CELL_SIZE+CELL_GAP)+CELL_SIZE/2.0;
         // so from above, we know ending should be on empty space
         let left_idx = get_base_index_left(0.0);
-        let right_idx = get_base_index_bottom(0.0+width);
+        let right_idx = get_base_index_right(0.0+width);
         assert_eq!(left_idx,0);
         assert_eq!(right_idx,2);
     }
 
-    //#[test]
-    //fn test_bounding_space_edge_case_at_max_offset(){
-    //}
+    #[test]
+    fn test_bounding_space_edge_case_at_origin_y(){
+        let height = 2.0*(CELL_SIZE+CELL_GAP)+CELL_SIZE/2.0;
+        // so from above, we know ending should be on empty space
+        let top_idx = get_base_index_top(0.0);
+        let bottom_idx = get_base_index_bottom(0.0+height);
+        assert_eq!(top_idx,0);
+        assert_eq!(bottom_idx,2);
+    }
+    #[test]
+    fn test_bounding_space_edge_case_at_max_offset_x(){
+        let width = WINDOW_WIDTH;
+        let offset_x = get_max_offset_x();
+
+        let right_idx = get_base_index_right(offset_x+width as f32);
+        assert_eq!(right_idx,(GRID_SIZE-1) as i32);
+    }
+
+    #[test]
+    fn test_bounding_space_edge_case_at_max_offset_y(){
+        let height = WINDOW_HEIGHT;
+        let offset_y = get_max_offset_y();
+
+        let bottom_idx = get_base_index_right(offset_y+height as f32);
+        assert_eq!(bottom_idx,(GRID_SIZE-1) as i32);
+    }
+
+    #[test]
+    fn test_get_distance_to_top_inside(){
+        let offset_y = CELL_SIZE+CELL_GAP+CELL_SIZE/3.0;
+        // based off variable above
+        let top_idx = 1;
+        assert_approx_eq!(get_distance_to_top(offset_y,top_idx).unwrap(), CELL_SIZE/3.0,1e-3f32);
+    }
+
+    #[test]
+    fn test_get_distance_to_top_empty(){
+        let offset_y = CELL_SIZE+CELL_GAP/3.0;
+        // based off variable above
+        let top_idx = 0;
+        assert_approx_eq!(get_distance_to_top(offset_y,top_idx).unwrap(), CELL_SIZE+CELL_GAP/3.0,1e-3f32);
+    }
+    #[test]
+    fn test_get_distance_to_left_inside(){
+        let offset_x = CELL_SIZE+CELL_GAP+CELL_SIZE/2.0;
+        // based off variable above
+        let left_idx = 1;
+        assert_approx_eq!(get_distance_to_left(offset_x,left_idx).unwrap(), CELL_SIZE/2.0,1e-3f32);
+    }
+    #[test]
+    fn test_get_distance_to_left_empty(){
+        let offset_x = CELL_SIZE+CELL_GAP/2.5;
+        // based off variable above
+        let left_idx = 0;
+        assert_approx_eq!(get_distance_to_left(offset_x,left_idx).unwrap(), CELL_SIZE+CELL_GAP/2.5,1e-3f32);
+    }
+
+    fn make_blinker(i:i32,j:i32,init_bmatrix:&mut BMatrix){
+        let init_location:(i32,i32) = (80,50);
+        if i==init_location.0 && j == init_location.1{
+            *init_bmatrix.at_mut(i,j).unwrap() = true;
+            *init_bmatrix.at_mut(i,j+1).unwrap() = true;
+            *init_bmatrix.at_mut(i,j+2).unwrap() = true;
+        }
+    }
+
+    fn make_square(i:i32,j:i32,init_bmatrix:&mut BMatrix){
+        let init_location:(i32,i32) = (50,50);
+        if i==init_location.0 && j == init_location.1{
+            *init_bmatrix.at_mut(i,j).unwrap() = true;
+            *init_bmatrix.at_mut(i+1,j).unwrap() = true;
+            *init_bmatrix.at_mut(i+1,j+1).unwrap() = true;
+            *init_bmatrix.at_mut(i,j+1).unwrap() = true;
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_update_view_before_shift(){
+        let mut init_bmatrix = BMatrix::new();
+        for j in 0..GRID_SIZE{
+            for i in 0..GRID_SIZE{
+                //make_blinker(i,j,&mut init_bmatrix);
+                //make_square(i,j,&mut init_bmatrix);
+                if i>GRID_SIZE/2{
+                    *init_bmatrix.at_mut(i,j).unwrap() = true;
+                }
+            }
+        }
+
+        let ref mut globals = setup().unwrap();
+        globals.grid.b_matrix = init_bmatrix;
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+
+    }
+
+    #[test]
+    #[ignore]
+    fn test_update_view_after_shift(){
+        println!("GRID_SIZE: {}",GRID_SIZE);
+        let mut init_bmatrix = BMatrix::new();
+        // just make part of the screen white
+        for j in 0..GRID_SIZE{
+            for i in 0..GRID_SIZE{
+                //make_blinker(i,j,&mut init_bmatrix);
+                //make_square(i,j,&mut init_bmatrix);
+                if i>GRID_SIZE/2{
+                    *init_bmatrix.at_mut(i,j).unwrap() = true;
+                }
+            }
+        }
+
+        let mut globals = setup().unwrap();
+        globals.grid = globals.grid.set_offset(get_max_offset_x(),0.0);
+        globals.grid.b_matrix = init_bmatrix;
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+    }
 
     //#[test]
     //fn test_FSubview_at(){

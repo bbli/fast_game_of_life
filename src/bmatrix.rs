@@ -68,20 +68,28 @@ impl BMatrix{
 impl MatrixView for BMatrix{
     type Item = bool;
     fn at(&self, i:i32, j:i32) -> GameResult<Self::Item>{
-        if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
+        if i < 0 || j < 0 {
+            Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
+        }
+        else if i >= GRID_SIZE || j>= GRID_SIZE {
+        //if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
+            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
+        }
+        else{
             //bool is copy type, so moving is fine
             Ok(self.0[(j*GRID_SIZE +i) as usize])
         }
-        else{
-            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
-        }
     }
     fn at_mut<'a>(&'a mut self, i:i32, j:i32) -> GameResult<&'a mut Self::Item>{
-        if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
-            Ok(&mut self.0[(j*GRID_SIZE +i) as usize])
+        if i < 0 || j < 0 {
+            Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
+        }
+        else if i >= GRID_SIZE || j>= GRID_SIZE {
+        //if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
+            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
         }
         else{
-            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
+            Ok(&mut self.0[(j*GRID_SIZE +i) as usize])
         }
     }
 }

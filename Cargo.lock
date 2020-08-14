@@ -4,6 +4,7 @@
 name = "CGOL"
 version = "0.1.0"
 dependencies = [
+ "assert_approx_eq",
  "ggez",
  "nalgebra",
  "rand 0.7.3",
@@ -100,6 +101,12 @@ name = "arrayvec"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cff77d8686867eceff3105329d4698d96c2391c176d5d03adc90c7389162b5b8"
+
+[[package]]
+name = "assert_approx_eq"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c07dab4369547dbe5114677b33fbbf724971019f3818172d59a97a61c774ffd"
 
 [[package]]
 name = "autocfg"
