@@ -133,3 +133,83 @@ pub fn create_init_SpriteBatchHandler(image:Image, ctx:&mut Context) -> SpriteBa
         //}
     //}
 //}
+
+pub fn get_base_index_right(x:f32)->i32{
+    empty_moves_forward(x)
+}
+
+pub fn get_base_index_bottom(y:f32)->i32{
+    empty_moves_forward(y)
+}
+
+pub fn get_base_index_top(y:f32)->i32{
+    empty_moves_back(y)
+}
+
+pub fn get_base_index_left(x:f32)->i32{
+    empty_moves_back(x)
+}
+
+
+pub fn empty_moves_back(z:f32)->i32{
+    // num_sections gives the number of complete CELL_SIZE+CELL_GAP sections
+    // -1 since it starts from 1(instead of 0 like the matrices)
+    let num_sections = (z/(CELL_SIZE+CELL_GAP)).ceil();
+    if num_sections == 0.0{
+        num_sections as i32
+    }
+    else{
+        num_sections as i32 -1
+    }
+}
+
+// EC: 0,0
+// PRECONDITON: z is positive
+//width>0 so we don't need to account for 0 edge case like in empty_moves_back
+pub fn empty_moves_forward(z:f32) -> i32{
+    // ************  Float Land  ************   
+    let num_sections = (z/(CELL_SIZE+CELL_GAP)).ceil();
+    let rightmost_point = num_sections*(CELL_SIZE+CELL_GAP);
+    let threshold = rightmost_point - CELL_GAP;
+
+    // ************  Adjusting back to Index Land  ************   
+     //means we are currently inside a box
+     //so num_sections is the "correct" idx
+    if threshold >= z{
+        (num_sections - 1.0) as i32
+    }
+    // we need to extend down to next cell
+    else{
+        num_sections as i32
+    }
+}
+
+pub fn get_top_of_cell(j:i32)->f32{
+    j as f32*(CELL_SIZE+CELL_GAP)
+}
+pub fn get_distance_to_top(offset_y:f32,top_idx:i32)->GameResult<f32>{
+    let top_of_upper_bound_cell = get_top_of_cell(top_idx);
+    println!("offset_y: {}",offset_y);
+    //println!("top_idx: {}",top_idx);
+    println!("top_of_upper_bound_cell: {}",top_of_upper_bound_cell);
+
+    if offset_y >= top_of_upper_bound_cell{
+        Ok(offset_y-top_of_upper_bound_cell)
+    }
+    else{
+        Err(GameError::EventLoopError("Top bounding cell should be above current offset".to_string()))
+    }
+}
+pub fn get_left_of_cell(i:i32)->f32{
+    i as f32*(CELL_SIZE+CELL_GAP)
+}
+pub fn get_distance_to_left(offset_x:f32,left_idx:i32)->GameResult<f32>{
+    let left_of_upper_bound_cell = get_left_of_cell(left_idx);
+    if offset_x >= left_of_upper_bound_cell{
+        Ok(offset_x-left_of_upper_bound_cell)
+    }
+    else{
+        Err(GameError::EventLoopError("Left bounding cell should be to left of current offset".to_string()))
+    }
+}
+
