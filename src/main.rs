@@ -104,47 +104,44 @@ impl Point{
     }
 }
 
-struct Grid {
+pub struct Grid {
     b_matrix: BMatrix,
     sys_time: Option<SystemTime>,
-    //mesh: graphics::Mesh,
     f_subview: FSubview,
-    f_offset: OffsetState
+    f_offset: OffsetState,
 }
 
-//fn new_rect(i: usize, j: usize) -> Rect {
-    //let i = i as f32;
-    //let j = j as f32;
-    //Rect::new(
-        //i * (CELL_SIZE as f32 + CELL_GAP),
-        //j * (CELL_SIZE as f32 + CELL_GAP),
-        //CELL_SIZE as f32,
-        //CELL_SIZE as f32,
-    //)
-//}
+fn new_rect(i: i32, j: i32) -> Rect {
+    let i = i as f32;
+    let j = j as f32;
+    Rect::new(
+        i * (CELL_SIZE as f32 + CELL_GAP),
+        j * (CELL_SIZE as f32 + CELL_GAP),
+        CELL_SIZE as f32,
+        CELL_SIZE as f32,
+    )
+}
 
 
 impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
     fn new(ctx: &mut Context) -> GameResult<Grid> {
-        // ************  MESH BUILDER METHOD  ************   
-        //let mut mesh = graphics::MeshBuilder::new();
-
-        //for i in 0..GRID_SIZE {
-            //for j in 0..GRID_SIZE {
-                //mesh.rectangle(DrawMode::fill(), new_rect(i, j), BLACK!());
-            //}
-        //}
-        //let mesh = mesh.build(ctx)?;
-        //Ok(Grid {
-            //matrix: Box::new([[false; GRID_SIZE]; GRID_SIZE]),
-            //mesh,
-        //})
-
-        // ************  SPRITE METHOD  ************   
+        
         let b_matrix = BMatrix::new();
         let sys_time = None;
-        //let image = Image::from_rgba8(_ctx, CELL_SIZE as u16, CELL_SIZE as u16,&BLACK());
+    
+        // ************  MESH BUILDER METHOD  ************   
+        let mut f_mesh = graphics::MeshBuilder::new();
+
+        for i in 0..GRID_SIZE {
+            for j in 0..GRID_SIZE {
+                f_mesh.rectangle(DrawMode::fill(), new_rect(i, j), BLACK!());
+            }
+        }
+        let f_mesh = f_mesh.build(ctx)?;
+
+        // ************  SPRITE METHOD  ************   
+        //let image = Image::from_rgba8(ctx, CELL_SIZE as u16, CELL_SIZE as u16,&BLACK());
 
         let white_image = Image::solid(ctx,CELL_SIZE as u16,WHITE!()).unwrap();
         let white_sb_handler = fsubview::create_init_SpriteBatchHandler(white_image,ctx);
@@ -288,18 +285,18 @@ pub fn main() -> GameResult {
 #[cfg(test)]
 mod tests {
     // ************  SETUP  ************   
-    use ggez::conf;
-    use ggez::{Context, GameResult};
-    use ggez::event::EventsLoop;
-    use super::*;
-    use assert_approx_eq::assert_approx_eq;
+    pub use ggez::conf;
+    pub use ggez::{Context, GameResult};
+    pub use ggez::event::EventsLoop;
+    pub use super::*;
+    pub use assert_approx_eq::assert_approx_eq;
 
-    struct Globals{
-        ctx: Context,
-        event_loop: EventsLoop,
-        grid: Grid
+    pub struct Globals{
+        pub ctx: Context,
+        pub event_loop: EventsLoop,
+        pub grid: Grid
     }
-    fn setup() -> GameResult<Globals>{
+    pub fn setup() -> GameResult<Globals>{
         let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
             conf::WindowMode::default()
                 .resizable(true)
@@ -329,194 +326,8 @@ mod tests {
     //}
 
     #[test]
-    fn test_BMatrix_index_on_subview(){
-        let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
-            conf::WindowMode::default()
-                .resizable(true)
-                .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
-        );
-        let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
-        // initialize a Grid object
-        let grid = Grid::new(ctx).unwrap();
-        // Check that a point close to origin
-        let value = grid.b_matrix.at(1,1).unwrap();
-        assert_eq!(value,false);
-        // Check last point: 
-        let value = grid.b_matrix.at((GRID_SIZE-1) as i32,(GRID_SIZE-1) as i32).unwrap();
-        assert_eq!(value,false);
-    }
-
-    #[should_panic]
-    #[test]
-    fn test_BMatrix_at_outOfBounds(){
-        println!("HI!!!!!!");
-        let globals = setup().unwrap();
-
-        let value = globals.grid.b_matrix.at((2*GRID_SIZE) as i32,0).unwrap();
-    }
-
-    #[test]
-    fn test_update_bmatrix_single_cell_become_dead(){
-        let mut b_matrix = BMatrix::new();
-        let i = GRID_SIZE-1;
-        let j = 40;
-        let i = i as i32;
-        let j = j as i32;
-
-        *b_matrix.at_mut(i,j).unwrap() = true;
-        assert_eq!(b_matrix.at(i,j).unwrap(),true);
-        let new_matrix = b_matrix.next_bmatrix();
-
-        assert_eq!(new_matrix.at(i,j).unwrap(),false);
-    }
-
-    #[test]
-    fn test_update_bmatrix_single_cell_become_alive(){
-        let mut b_matrix = BMatrix::new();
-        let i = 40;
-        let j = 40;
-        *b_matrix.at_mut(i+1,j).unwrap() = true;
-        *b_matrix.at_mut(i,j+1).unwrap() = true;
-        *b_matrix.at_mut(i-1,j).unwrap() = true;
-
-        let next_bmatrix = b_matrix.next_bmatrix();
-
-        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
-        assert_eq!(next_bmatrix.at(i+1,j).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i,j+1).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
-    }
-
-    #[test]
-    fn test_update_bmatrix_edge_cell_become_alive(){
-        let mut b_matrix = BMatrix::new();
-        let i = GRID_SIZE-1;
-        let j = 40;
-        let i = i as i32;
-        let j = j as i32;
-        *b_matrix.at_mut(i,j+1).unwrap() = true;
-        *b_matrix.at_mut(i-1,j).unwrap() = true;
-        *b_matrix.at_mut(i,j-1).unwrap() = true;
-
-        let next_bmatrix = b_matrix.next_bmatrix();
-
-        assert_eq!(next_bmatrix.at(i,j+1).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i,j-1).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
-    }
-
-    #[test]
-    fn test_update_bmatrix_corner_cell_stays_alive(){
-        let mut b_matrix = BMatrix::new();
-        let i = GRID_SIZE-1;
-        let j = GRID_SIZE-1;
-        let i = i as i32;
-        let j = j as i32;
-
-        *b_matrix.at_mut(i,j-1).unwrap() = true;
-        *b_matrix.at_mut(i-1,j).unwrap() = true;
-        *b_matrix.at_mut(i,j).unwrap() = true;
-
-        let next_bmatrix = b_matrix.next_bmatrix();
-
-        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
-        assert_eq!(next_bmatrix.at(i,j-1).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
-    }
-
-    #[test]
-    fn test_bounding_space_vertical(){
-        let height = CELL_SIZE/2.0+CELL_GAP/2.0;
-        let offset_y = (2.0*(CELL_SIZE+CELL_GAP)) - CELL_GAP/2.0;
-        // so from variables above, we know ending should be on empty space
-        let top_idx = fsubview::get_base_index_top(offset_y);
-        let bottom_idx = fsubview::get_base_index_bottom(offset_y+height);
-        assert_eq!(top_idx,1);
-        assert_eq!(bottom_idx,2);
-    }
-
-    #[test]
-    fn test_bounding_space_horizontal(){
-        let width = CELL_SIZE+CELL_GAP+CELL_SIZE/2.0+CELL_GAP/2.0;
-        let offset_x = (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
-        // so from variables above, we know ending should be on empty space
-        let left_idx = fsubview::get_base_index_left(offset_x);
-        let right_idx = fsubview::get_base_index_right(offset_x+width);
-        assert_eq!(left_idx,1);
-        assert_eq!(right_idx,3);
-    }
-
-    #[test]
-    fn test_bounding_space_edge_case_at_origin_x(){
-        let width = 2.0*(CELL_SIZE+CELL_GAP)+CELL_SIZE/2.0;
-        // so from above, we know ending should be on empty space
-        let left_idx = fsubview::get_base_index_left(0.0);
-        let right_idx = fsubview::get_base_index_right(0.0+width);
-        assert_eq!(left_idx,0);
-        assert_eq!(right_idx,2);
-    }
-
-    #[test]
-    fn test_bounding_space_edge_case_at_origin_y(){
-        let height = 2.0*(CELL_SIZE+CELL_GAP)+CELL_SIZE/2.0;
-        // so from above, we know ending should be on empty space
-        let top_idx = fsubview::get_base_index_top(0.0);
-        let bottom_idx = fsubview::get_base_index_bottom(0.0+height);
-        assert_eq!(top_idx,0);
-        assert_eq!(bottom_idx,2);
-    }
-    #[test]
-    fn test_bounding_space_edge_case_at_max_offset_x(){
-        let width = WINDOW_WIDTH;
-        let offset_x = user::get_max_offset_x();
-
-        let right_idx = fsubview::get_base_index_right(offset_x+width as f32);
-        assert_eq!(right_idx,(GRID_SIZE-1) as i32);
-    }
-
-    #[test]
-    fn test_bounding_space_edge_case_at_max_offset_y(){
-        let height = WINDOW_HEIGHT;
-        let offset_y = user::get_max_offset_y();
-
-        let bottom_idx = fsubview::get_base_index_right(offset_y+height as f32);
-        assert_eq!(bottom_idx,(GRID_SIZE-1) as i32);
-    }
-
-    #[test]
-    fn test_get_distance_to_top_inside(){
-        let offset_y = CELL_SIZE+CELL_GAP+CELL_SIZE/3.0;
-        // based off variable above
-        let top_idx = 1;
-        assert_approx_eq!(fsubview::get_distance_to_top(offset_y,top_idx).unwrap(), CELL_SIZE/3.0,1e-3f32);
-    }
-
-    #[test]
-    fn test_get_distance_to_top_empty(){
-        let offset_y = CELL_SIZE+CELL_GAP/3.0;
-        // based off variable above
-        let top_idx = 0;
-        assert_approx_eq!(fsubview::get_distance_to_top(offset_y,top_idx).unwrap(), CELL_SIZE+CELL_GAP/3.0,1e-3f32);
-    }
-    #[test]
-    fn test_get_distance_to_left_inside(){
-        let offset_x = CELL_SIZE+CELL_GAP+CELL_SIZE/2.0;
-        // based off variable above
-        let left_idx = 1;
-        assert_approx_eq!(fsubview::get_distance_to_left(offset_x,left_idx).unwrap(), CELL_SIZE/2.0,1e-3f32);
-    }
-    #[test]
-    fn test_get_distance_to_left_empty(){
-        let offset_x = CELL_SIZE+CELL_GAP/2.5;
-        // based off variable above
-        let left_idx = 0;
-        assert_approx_eq!(fsubview::get_distance_to_left(offset_x,left_idx).unwrap(), CELL_SIZE+CELL_GAP/2.5,1e-3f32);
-    }
-
-    #[test]
     #[ignore]
-    fn test_update_view_before_shift(){
+    fn test_update_view_before_offset(){
         // NOTE: turn off next_bmatrix() before executing this
         let mut init_bmatrix = BMatrix::new();
         for j in 0..GRID_SIZE{
@@ -532,12 +343,11 @@ mod tests {
         let ref mut globals = setup().unwrap();
         globals.grid.b_matrix = init_bmatrix;
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
-
     }
 
     #[test]
     #[ignore]
-    fn test_update_view_after_shift(){
+    fn test_update_view_after_offset(){
         // NOTE: turn off next_bmatrix() before executing this
         println!("GRID_SIZE: {}",GRID_SIZE);
         let mut init_bmatrix = BMatrix::new();
@@ -558,47 +368,6 @@ mod tests {
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
 
-    #[test]
-    #[ignore]
-    fn test_transition_bottom_right_corner(){
-        // ************  GRID  ************   
-        let mut init_bmatrix = BMatrix::new();
-        setup::make_random(&mut init_bmatrix);
-        // ************  GGEZ  ************   
-        let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
-            conf::WindowMode::default()
-                .resizable(true)
-                .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
-        );
-
-        // ************  RUNNING  ************   
-        let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
-        graphics::set_blend_mode(ctx,BlendMode::Replace);
-        //let origin_point = (GRID_SIZE/2) as f32;
-        let ref mut state = Grid::new(ctx).unwrap().init_seed(init_bmatrix).init_offset(user::get_max_offset_x()-5.0,user::get_max_offset_y()-5.0);
-        event::run(ctx, event_loop, state);
-    }
-
-    #[test]
-    #[ignore]
-    fn test_transition_top_left_corner(){
-        // ************  GRID  ************   
-        let mut init_bmatrix = BMatrix::new();
-        setup::make_random(&mut init_bmatrix);
-        // ************  GGEZ  ************   
-        let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
-            conf::WindowMode::default()
-                .resizable(true)
-                .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
-        );
-
-        // ************  RUNNING  ************   
-        let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
-        graphics::set_blend_mode(ctx,BlendMode::Replace);
-        //let origin_point = (GRID_SIZE/2) as f32;
-        let ref mut state = Grid::new(ctx).unwrap().init_seed(init_bmatrix).init_offset(0.0,0.0);
-        event::run(ctx, event_loop, state);
-    }
     //#[test]
     //fn test_FSubview_at(){
         //let globals = setup().unwrap();

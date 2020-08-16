@@ -93,3 +93,104 @@ impl MatrixView for BMatrix{
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::*;
+    #[test]
+    fn test_BMatrix_index_on_subview(){
+        let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
+            conf::WindowMode::default()
+                .resizable(true)
+                .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
+        );
+        let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
+        // initialize a Grid object
+        let grid = Grid::new(ctx).unwrap();
+        // Check that a point close to origin
+        let value = grid.b_matrix.at(1,1).unwrap();
+        assert_eq!(value,false);
+        // Check last point: 
+        let value = grid.b_matrix.at((GRID_SIZE-1) as i32,(GRID_SIZE-1) as i32).unwrap();
+        assert_eq!(value,false);
+    }
+
+    #[should_panic]
+    #[test]
+    fn test_BMatrix_at_outOfBounds(){
+        println!("HI!!!!!!");
+        let globals = setup().unwrap();
+
+        let value = globals.grid.b_matrix.at((2*GRID_SIZE) as i32,0).unwrap();
+    }
+
+    #[test]
+    fn test_update_bmatrix_single_cell_become_dead(){
+        let mut b_matrix = BMatrix::new();
+        let i = GRID_SIZE-1;
+        let j = 40;
+        let i = i as i32;
+        let j = j as i32;
+
+        *b_matrix.at_mut(i,j).unwrap() = true;
+        assert_eq!(b_matrix.at(i,j).unwrap(),true);
+        let new_matrix = b_matrix.next_bmatrix();
+
+        assert_eq!(new_matrix.at(i,j).unwrap(),false);
+    }
+
+    #[test]
+    fn test_update_bmatrix_single_cell_become_alive(){
+        let mut b_matrix = BMatrix::new();
+        let i = 40;
+        let j = 40;
+        *b_matrix.at_mut(i+1,j).unwrap() = true;
+        *b_matrix.at_mut(i,j+1).unwrap() = true;
+        *b_matrix.at_mut(i-1,j).unwrap() = true;
+
+        let next_bmatrix = b_matrix.next_bmatrix();
+
+        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
+        assert_eq!(next_bmatrix.at(i+1,j).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i,j+1).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
+    }
+
+    #[test]
+    fn test_update_bmatrix_edge_cell_become_alive(){
+        let mut b_matrix = BMatrix::new();
+        let i = GRID_SIZE-1;
+        let j = 40;
+        let i = i as i32;
+        let j = j as i32;
+        *b_matrix.at_mut(i,j+1).unwrap() = true;
+        *b_matrix.at_mut(i-1,j).unwrap() = true;
+        *b_matrix.at_mut(i,j-1).unwrap() = true;
+
+        let next_bmatrix = b_matrix.next_bmatrix();
+
+        assert_eq!(next_bmatrix.at(i,j+1).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i,j-1).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
+    }
+
+    #[test]
+    fn test_update_bmatrix_corner_cell_stays_alive(){
+        let mut b_matrix = BMatrix::new();
+        let i = GRID_SIZE-1;
+        let j = GRID_SIZE-1;
+        let i = i as i32;
+        let j = j as i32;
+
+        *b_matrix.at_mut(i,j-1).unwrap() = true;
+        *b_matrix.at_mut(i-1,j).unwrap() = true;
+        *b_matrix.at_mut(i,j).unwrap() = true;
+
+        let next_bmatrix = b_matrix.next_bmatrix();
+
+        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
+        assert_eq!(next_bmatrix.at(i,j-1).unwrap(),false);
+        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
+    }
+}

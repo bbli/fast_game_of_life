@@ -273,3 +273,49 @@ pub fn transition_offset_state_down(state: OffsetState) -> OffsetState {
         BottomLeftCorner(point) => BottomLeftCorner(point)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::*;
+    #[test]
+    #[ignore]
+    fn test_transition_bottom_right_corner(){
+        // ************  GRID  ************   
+        let mut init_bmatrix = BMatrix::new();
+        setup::make_random(&mut init_bmatrix);
+        // ************  GGEZ  ************   
+        let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
+            conf::WindowMode::default()
+                .resizable(true)
+                .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
+        );
+
+        // ************  RUNNING  ************   
+        let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
+        graphics::set_blend_mode(ctx,BlendMode::Replace);
+        //let origin_point = (GRID_SIZE/2) as f32;
+        let ref mut state = Grid::new(ctx).unwrap().init_seed(init_bmatrix).init_offset(user::get_max_offset_x()-5.0,user::get_max_offset_y()-5.0);
+        event::run(ctx, event_loop, state);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_transition_top_left_corner(){
+        // ************  GRID  ************   
+        let mut init_bmatrix = BMatrix::new();
+        setup::make_random(&mut init_bmatrix);
+        // ************  GGEZ  ************   
+        let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
+            conf::WindowMode::default()
+                .resizable(true)
+                .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
+        );
+
+        // ************  RUNNING  ************   
+        let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
+        graphics::set_blend_mode(ctx,BlendMode::Replace);
+        //let origin_point = (GRID_SIZE/2) as f32;
+        let ref mut state = Grid::new(ctx).unwrap().init_seed(init_bmatrix).init_offset(0.0,0.0);
+        event::run(ctx, event_loop, state);
+    }
+}

@@ -228,3 +228,91 @@ pub fn get_distance_to_left(offset_x:f32,left_idx:i32)->GameResult<f32>{
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use crate::tests::*;
+    #[test]
+    fn test_bounding_space_vertical(){
+        let height = CELL_SIZE/2.0+CELL_GAP/2.0;
+        let offset_y = (2.0*(CELL_SIZE+CELL_GAP)) - CELL_GAP/2.0;
+        // so from variables above, we know ending should be on empty space
+        let top_idx = fsubview::get_base_index_top(offset_y);
+        let bottom_idx = fsubview::get_base_index_bottom(offset_y+height);
+        assert_eq!(top_idx,1);
+        assert_eq!(bottom_idx,2);
+    }
+    #[test]
+    fn test_bounding_space_horizontal(){
+        let width = CELL_SIZE+CELL_GAP+CELL_SIZE/2.0+CELL_GAP/2.0;
+        let offset_x = (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
+        // so from variables above, we know ending should be on empty space
+        let left_idx = fsubview::get_base_index_left(offset_x);
+        let right_idx = fsubview::get_base_index_right(offset_x+width);
+        assert_eq!(left_idx,1);
+        assert_eq!(right_idx,3);
+    }
+    #[test]
+    fn test_bounding_space_edge_case_at_origin_x(){
+        let width = 2.0*(CELL_SIZE+CELL_GAP)+CELL_SIZE/2.0;
+        // so from above, we know ending should be on empty space
+        let left_idx = fsubview::get_base_index_left(0.0);
+        let right_idx = fsubview::get_base_index_right(0.0+width);
+        assert_eq!(left_idx,0);
+        assert_eq!(right_idx,2);
+    }
+
+    #[test]
+    fn test_bounding_space_edge_case_at_origin_y(){
+        let height = 2.0*(CELL_SIZE+CELL_GAP)+CELL_SIZE/2.0;
+        // so from above, we know ending should be on empty space
+        let top_idx = fsubview::get_base_index_top(0.0);
+        let bottom_idx = fsubview::get_base_index_bottom(0.0+height);
+        assert_eq!(top_idx,0);
+        assert_eq!(bottom_idx,2);
+    }
+    #[test]
+    fn test_bounding_space_edge_case_at_max_offset_x(){
+        let width = WINDOW_WIDTH;
+        let offset_x = user::get_max_offset_x();
+
+        let right_idx = fsubview::get_base_index_right(offset_x+width as f32);
+        assert_eq!(right_idx,(GRID_SIZE-1) as i32);
+    }
+    #[test]
+    fn test_bounding_space_edge_case_at_max_offset_y(){
+        let height = WINDOW_HEIGHT;
+        let offset_y = user::get_max_offset_y();
+
+        let bottom_idx = fsubview::get_base_index_right(offset_y+height as f32);
+        assert_eq!(bottom_idx,(GRID_SIZE-1) as i32);
+    }
+    #[test]
+    fn test_get_distance_to_top_inside(){
+        let offset_y = CELL_SIZE+CELL_GAP+CELL_SIZE/3.0;
+        // based off variable above
+        let top_idx = 1;
+        assert_approx_eq!(fsubview::get_distance_to_top(offset_y,top_idx).unwrap(), CELL_SIZE/3.0,1e-3f32);
+    }
+
+    #[test]
+    fn test_get_distance_to_top_empty(){
+        let offset_y = CELL_SIZE+CELL_GAP/3.0;
+        // based off variable above
+        let top_idx = 0;
+        assert_approx_eq!(fsubview::get_distance_to_top(offset_y,top_idx).unwrap(), CELL_SIZE+CELL_GAP/3.0,1e-3f32);
+    }
+    #[test]
+    fn test_get_distance_to_left_inside(){
+        let offset_x = CELL_SIZE+CELL_GAP+CELL_SIZE/2.0;
+        // based off variable above
+        let left_idx = 1;
+        assert_approx_eq!(fsubview::get_distance_to_left(offset_x,left_idx).unwrap(), CELL_SIZE/2.0,1e-3f32);
+    }
+    #[test]
+    fn test_get_distance_to_left_empty(){
+        let offset_x = CELL_SIZE+CELL_GAP/2.5;
+        // based off variable above
+        let left_idx = 0;
+        assert_approx_eq!(fsubview::get_distance_to_left(offset_x,left_idx).unwrap(), CELL_SIZE+CELL_GAP/2.5,1e-3f32);
+    }
+}
