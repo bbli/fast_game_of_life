@@ -175,7 +175,7 @@ pub fn empty_moves_forward(z:f32) -> i32{
     // ************  Adjusting back to Index Land  ************   
      //means we are currently inside a box
      //so num_sections is the "correct" idx
-    if threshold >= z{
+    if threshold + EPSILON >= z{
         (num_sections - 1.0) as i32
     }
     // we need to extend down to next cell
@@ -189,9 +189,8 @@ pub fn get_top_of_cell(j:i32)->f32{
 }
 pub fn get_distance_to_top(offset_y:f32,top_idx:i32)->GameResult<f32>{
     let top_of_upper_bound_cell = get_top_of_cell(top_idx);
-    println!("offset_y: {}",offset_y);
-    //println!("top_idx: {}",top_idx);
-    println!("top_of_upper_bound_cell: {}",top_of_upper_bound_cell);
+    //println!("offset_y: {}",offset_y);
+    //println!("top_of_upper_bound_cell: {}",top_of_upper_bound_cell);
 
     if offset_y >= top_of_upper_bound_cell{
         Ok(offset_y-top_of_upper_bound_cell)

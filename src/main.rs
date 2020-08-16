@@ -10,7 +10,6 @@ use ggez::input::keyboard;
 use ggez::error::GameError;
 use ggez::graphics::{DrawMode, Image, Rect,DrawParam,BlendMode};
 use ggez::{Context, GameResult};
-use rand::prelude::*;
 
 //use std::{thread,time};
 
@@ -22,6 +21,8 @@ use fsubview::FSubview;
 
 mod user;
 use user::OffsetState;
+
+mod setup;
 //use fsubview;
 // ************  Frontend Globals  ************
 const WINDOW_WIDTH: usize = 1920;
@@ -30,6 +31,7 @@ const WINDOW_HEIGHT: usize = 1080;
 const CELL_SIZE: f32 = 20.0;
 //any smaller and may not print out correctly
 const CELL_GAP: f32 = CELL_SIZE / 6.0;
+const EPSILON: f32 = 1e-2f32;
 
 // ************  Backend Globals  ************
 // 1. Some code may be reliant(update_view) on this number being bigger than max(NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT), which is an approximation to worst case scenario, whose function is also provided below
@@ -51,7 +53,7 @@ const CELL_GAP: f32 = CELL_SIZE / 6.0;
 // 3. Unfortunately, Rust currently does not support compile time if,
 // so just hardcode a number for the grid size
 //const GRID_SIZE: usize >= std::cmp::max(NUM_BLOCKS_HEIGHT, NUM_BLOCKS_WIDTH);
-const GRID_SIZE: i32 = 200;
+static GRID_SIZE: i32 = 200;
 
 
 //const INVALID_X: i32 = 2*GRID_SIZE;
@@ -90,6 +92,7 @@ macro_rules! GREY {
 
 // ************  MAIN CODE  ************   
 
+#[derive(Clone,Copy)]
 pub struct Point{
     x: f32,
     y: f32
@@ -99,6 +102,7 @@ impl Point{
         Point{x,y}
     }
 }
+
 struct Grid {
     b_matrix: BMatrix,
     //mesh: graphics::Mesh,
@@ -169,12 +173,13 @@ impl Grid {
     fn update_view(&mut self)->GameResult{
         // 1. get bounding boxes
         // TODO: remove divide by 2 once testing of offset/user moving is complete
-        let top_idx = fsubview::get_base_index_top(self.f_offset.y);
+        let offset_point = self.f_offset.get_point();
+        let top_idx = fsubview::get_base_index_top(offset_point.y);
         //let bottom_idx = get_base_index_bottom(self.f_offset.y+WINDOW_HEIGHT as f32/2.0);
-        let bottom_idx = fsubview::get_base_index_bottom(self.f_offset.y+WINDOW_HEIGHT as f32);
+        let bottom_idx = fsubview::get_base_index_bottom(offset_point.y+WINDOW_HEIGHT as f32);
 
-        let left_idx = fsubview::get_base_index_left(self.f_offset.x);
-        let right_idx = fsubview::get_base_index_right(self.f_offset.x+WINDOW_WIDTH as f32);
+        let left_idx = fsubview::get_base_index_left(offset_point.x);
+        let right_idx = fsubview::get_base_index_right(offset_point.x+WINDOW_WIDTH as f32);
 
         //println!("Top idx: {}",top_idx);
         //println!("Bottom idx: {}",bottom_idx);
@@ -200,8 +205,8 @@ impl Grid {
         }
         // 3. finally define new relative offset
         // aka relative to the box at (left_idx,top_idx)
-        let rel_offset_y = fsubview::get_distance_to_top(self.f_offset.y,top_idx)?;
-        let rel_offset_x = fsubview::get_distance_to_left(self.f_offset.x,left_idx)?;
+        let rel_offset_y = fsubview::get_distance_to_top(offset_point.y,top_idx)?;
+        let rel_offset_x = fsubview::get_distance_to_left(offset_point.x,left_idx)?;
         self.f_subview.update_relative_offset(rel_offset_x,rel_offset_y);
         Ok(())
     }
@@ -263,15 +268,7 @@ pub fn main() -> GameResult {
 
     // ************  GRID  ************   
     let mut init_bmatrix = BMatrix::new();
-    // Blinker pattern
-    let mut rng = rand::thread_rng();
-    for j in 0..GRID_SIZE{
-        for i in 0..GRID_SIZE{
-            if rand::random(){
-                *init_bmatrix.at_mut(i as i32,j as i32).unwrap() =true;
-            }
-        }
-    }
+    setup::make_random(&mut init_bmatrix);
     // ************  GGEZ  ************   
     let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
         conf::WindowMode::default()
@@ -516,25 +513,6 @@ mod tests {
         assert_approx_eq!(fsubview::get_distance_to_left(offset_x,left_idx).unwrap(), CELL_SIZE+CELL_GAP/2.5,1e-3f32);
     }
 
-    fn make_blinker(i:i32,j:i32,init_bmatrix:&mut BMatrix){
-        let init_location:(i32,i32) = (80,50);
-        if i==init_location.0 && j == init_location.1{
-            *init_bmatrix.at_mut(i,j).unwrap() = true;
-            *init_bmatrix.at_mut(i,j+1).unwrap() = true;
-            *init_bmatrix.at_mut(i,j+2).unwrap() = true;
-        }
-    }
-
-    fn make_square(i:i32,j:i32,init_bmatrix:&mut BMatrix){
-        let init_location:(i32,i32) = (50,50);
-        if i==init_location.0 && j == init_location.1{
-            *init_bmatrix.at_mut(i,j).unwrap() = true;
-            *init_bmatrix.at_mut(i+1,j).unwrap() = true;
-            *init_bmatrix.at_mut(i+1,j+1).unwrap() = true;
-            *init_bmatrix.at_mut(i,j+1).unwrap() = true;
-        }
-    }
-
     #[test]
     #[ignore]
     fn test_update_view_before_shift(){
@@ -579,6 +557,47 @@ mod tests {
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
 
+    #[test]
+    #[ignore]
+    fn test_transition_bottom_right_corner(){
+        // ************  GRID  ************   
+        let mut init_bmatrix = BMatrix::new();
+        setup::make_random(&mut init_bmatrix);
+        // ************  GGEZ  ************   
+        let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
+            conf::WindowMode::default()
+                .resizable(true)
+                .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
+        );
+
+        // ************  RUNNING  ************   
+        let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
+        graphics::set_blend_mode(ctx,BlendMode::Replace);
+        //let origin_point = (GRID_SIZE/2) as f32;
+        let ref mut state = Grid::new(ctx).unwrap().init_seed(init_bmatrix).init_offset(user::get_max_offset_x()-5.0,user::get_max_offset_y()-5.0);
+        event::run(ctx, event_loop, state);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_transition_top_left_corner(){
+        // ************  GRID  ************   
+        let mut init_bmatrix = BMatrix::new();
+        setup::make_random(&mut init_bmatrix);
+        // ************  GGEZ  ************   
+        let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
+            conf::WindowMode::default()
+                .resizable(true)
+                .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
+        );
+
+        // ************  RUNNING  ************   
+        let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
+        graphics::set_blend_mode(ctx,BlendMode::Replace);
+        //let origin_point = (GRID_SIZE/2) as f32;
+        let ref mut state = Grid::new(ctx).unwrap().init_seed(init_bmatrix).init_offset(0.0,0.0);
+        event::run(ctx, event_loop, state);
+    }
     //#[test]
     //fn test_FSubview_at(){
         //let globals = setup().unwrap();
