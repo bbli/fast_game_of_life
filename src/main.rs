@@ -156,8 +156,8 @@ impl Grid {
         Ok(Grid{
             b_matrix, 
             sys_time,
-            f_subview: FSubview{black_sb_handler,white_sb_handler,relative_offset: Point{x:0.0,y:0.0}},
-            f_offset: OffsetState::default()
+            f_subview: FSubview{black_sb_handler,white_sb_handler,relative_offset: Point{x:0.0,y:0.0},mesh: f_mesh,mesh_builder: graphics::MeshBuilder::new()},
+            f_offset: OffsetState::default(),
             }
         )
     }
@@ -173,16 +173,11 @@ impl Grid {
         self
     }
 
-    fn update_view(&mut self)->GameResult{
+    fn update_view(&mut self,ctx:&mut Context)->GameResult{
         // 1. get bounding boxes
-        // TODO: remove divide by 2 once testing of offset/user moving is complete
         let offset_point = self.f_offset.get_point();
-        let top_idx = fsubview::get_base_index_top(offset_point.y);
-        //let bottom_idx = get_base_index_bottom(self.f_offset.y+WINDOW_HEIGHT as f32/2.0);
-        let bottom_idx = fsubview::get_base_index_bottom(offset_point.y+WINDOW_HEIGHT as f32);
-
-        let left_idx = fsubview::get_base_index_left(offset_point.x);
-        let right_idx = fsubview::get_base_index_right(offset_point.x+WINDOW_WIDTH as f32);
+        let (top_idx,bottom_idx) = fsubview::get_vertical_range_of_view(offset_point.y);
+        let (left_idx,right_idx) = fsubview::get_horizontal_range_of_view(offset_point.x);
 
         //println!("Top idx: {}",top_idx);
         //println!("Bottom idx: {}",bottom_idx);
@@ -190,7 +185,7 @@ impl Grid {
         //println!("right idx: {}",right_idx);
 
         // 2. now draw from base_index_top -> base_index_bottom, inclusive
-        self.f_subview.clear();
+        self.f_subview.startView();
         for j in top_idx..bottom_idx+1{
             let relative_j = j - top_idx;
             for i in left_idx..right_idx+1{
@@ -198,14 +193,15 @@ impl Grid {
 
                 if self.b_matrix.at(i,j)?{
                     //self.f_subview.change_to_white(i,j);
-                    self.f_subview.add_to_white(relative_i,relative_j);
+                    self.f_subview.addWhiteToView(relative_i,relative_j);
                 }
                 else{
                     //self.f_subview.change_to_black(i,j);
-                    self.f_subview.add_to_black(relative_i,relative_j);
+                    self.f_subview.addBlackToView(relative_i,relative_j);
                 }
             }
         }
+        self.f_subview.endView(ctx);
         // 3. finally define new relative offset
         // aka relative to the box at (left_idx,top_idx)
         let rel_offset_y = fsubview::get_distance_to_top(offset_point.y,top_idx)?;
@@ -240,21 +236,21 @@ trait MatrixView{
 
 
 impl event::EventHandler for Grid {
-    fn update(&mut self, _ctx: &mut Context) -> GameResult {
+    fn update(&mut self, ctx: &mut Context) -> GameResult {
         self.sys_time = Some(SystemTime::now());
         //let ten_seconds = time::Duration::from_secs(10);
         //thread::sleep(ten_seconds);
 
         self.b_matrix = self.b_matrix.next_bmatrix();
-        self.update_offset(_ctx);
+        self.update_offset(ctx);
         // use update b_matrix to update view
-        self.update_view()?;
+        self.update_view(ctx)?;
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, GREY!());
-        self.f_subview.draw(ctx)?;
+        self.f_subview.drawView(ctx)?;
         graphics::present(ctx)?;
 
         let time_lapse = self.sys_time.unwrap().elapsed().expect("System clock did something funny");

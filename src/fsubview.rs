@@ -26,19 +26,27 @@ pub struct SpriteBatchHandler{
 pub struct FSubview{
     pub black_sb_handler: SpriteBatchHandler,
     pub white_sb_handler: SpriteBatchHandler,
-    pub relative_offset: Point
+    pub relative_offset: Point,
+    pub mesh_builder: graphics::MeshBuilder,
+    pub mesh: graphics::Mesh
 }
 
 impl FSubview{
-    pub fn clear(&mut self){
-        self.black_sb_handler.spritebatch.clear();
-        self.white_sb_handler.spritebatch.clear();
+    pub fn startView(&mut self){
+        //self.black_sb_handler.spritebatch.clear();
+        //self.white_sb_handler.spritebatch.clear();
+        self.mesh_builder = graphics::MeshBuilder::new();
     }
-    pub fn add_to_white(&mut self,relative_i:i32,relative_j:i32){
-        self.white_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
+    pub fn addWhiteToView(&mut self,relative_i:i32,relative_j:i32){
+        //self.white_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
+        self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),WHITE!());
     }
-    pub fn add_to_black(&mut self,relative_i:i32,relative_j:i32){
-        self.black_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
+    pub fn addBlackToView(&mut self,relative_i:i32,relative_j:i32){
+        //self.black_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
+        self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),BLACK!());
+    }
+    pub fn endView(&mut self,ctx:&mut Context){
+        self.mesh = self.mesh_builder.build(ctx).expect("Something went wrong during Mesh Building");
     }
     pub fn update_relative_offset(&mut self,x:f32,y:f32){
         self.relative_offset.x = x;
@@ -55,15 +63,16 @@ impl FSubview{
         //self.white_sb_handler.set_correct(i,j);
         //self.black_sb_handler.set_invalid(i,j);
     //}
-    pub fn draw(&self,ctx: &mut Context)-> GameResult{
+    pub fn drawView(&self,ctx: &mut Context)-> GameResult{
         //println!("Relative offset x: {}",self.relative_offset.x);
         //println!("Relative offset y: {}",self.relative_offset.y);
         let offset_draw_param = DrawParam::new()
                             .dest(Point2::new(-self.relative_offset.x,-self.relative_offset.y));
-        match graphics::draw(ctx, &self.black_sb_handler.spritebatch ,offset_draw_param){
-            Ok(value) => graphics::draw(ctx, &self.white_sb_handler.spritebatch ,offset_draw_param),
-            Err(x) => Err(x)
-        }
+        //match graphics::draw(ctx, &self.black_sb_handler.spritebatch ,offset_draw_param){
+            //Ok(value) => graphics::draw(ctx, &self.white_sb_handler.spritebatch ,offset_draw_param),
+            //Err(x) => Err(x)
+        //}
+        graphics::draw(ctx,&self.mesh,offset_draw_param)
     }
 }
 //pub enum CellState{
@@ -133,20 +142,27 @@ pub fn create_init_SpriteBatchHandler(image:Image, ctx:&mut Context) -> SpriteBa
         //}
     //}
 //}
+pub fn get_vertical_range_of_view(y:f32)->(i32,i32){
+    (get_base_index_top(y),get_base_index_bottom(y+WINDOW_HEIGHT as f32))
+}
 
-pub fn get_base_index_right(x:f32)->i32{
+pub fn get_horizontal_range_of_view(x:f32) -> (i32,i32){
+    (get_base_index_left(x),get_base_index_right(x+WINDOW_WIDTH as f32))
+}
+
+fn get_base_index_right(x:f32)->i32{
     empty_moves_forward(x)
 }
 
-pub fn get_base_index_bottom(y:f32)->i32{
+fn get_base_index_bottom(y:f32)->i32{
     empty_moves_forward(y)
 }
 
-pub fn get_base_index_top(y:f32)->i32{
+fn get_base_index_top(y:f32)->i32{
     empty_moves_back(y)
 }
 
-pub fn get_base_index_left(x:f32)->i32{
+fn get_base_index_left(x:f32)->i32{
     empty_moves_back(x)
 }
 
@@ -184,7 +200,7 @@ pub fn empty_moves_forward(z:f32) -> i32{
     }
 }
 
-pub fn get_top_of_cell(j:i32)->f32{
+fn get_top_of_cell(j:i32)->f32{
     j as f32*(CELL_SIZE+CELL_GAP)
 }
 pub fn get_distance_to_top(offset_y:f32,top_idx:i32)->GameResult<f32>{
@@ -199,7 +215,7 @@ pub fn get_distance_to_top(offset_y:f32,top_idx:i32)->GameResult<f32>{
         Err(GameError::EventLoopError("Top bounding cell should be above current offset".to_string()))
     }
 }
-pub fn get_left_of_cell(i:i32)->f32{
+fn get_left_of_cell(i:i32)->f32{
     i as f32*(CELL_SIZE+CELL_GAP)
 }
 pub fn get_distance_to_left(offset_x:f32,left_idx:i32)->GameResult<f32>{
