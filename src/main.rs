@@ -12,6 +12,7 @@ use ggez::graphics::{DrawMode, Image, Rect,DrawParam,BlendMode};
 use ggez::{Context, GameResult};
 
 //use std::{thread,time};
+use std::time::{SystemTime,UNIX_EPOCH};
 
 mod bmatrix;
 use bmatrix::*;
@@ -105,6 +106,7 @@ impl Point{
 
 struct Grid {
     b_matrix: BMatrix,
+    sys_time: Option<SystemTime>,
     //mesh: graphics::Mesh,
     f_subview: FSubview,
     f_offset: OffsetState
@@ -141,7 +143,7 @@ impl Grid {
 
         // ************  SPRITE METHOD  ************   
         let b_matrix = BMatrix::new();
-
+        let sys_time = None;
         //let image = Image::from_rgba8(_ctx, CELL_SIZE as u16, CELL_SIZE as u16,&BLACK());
 
         let white_image = Image::solid(ctx,CELL_SIZE as u16,WHITE!()).unwrap();
@@ -153,6 +155,7 @@ impl Grid {
         
         Ok(Grid{
             b_matrix, 
+            sys_time,
             f_subview: FSubview{black_sb_handler,white_sb_handler,relative_offset: Point{x:0.0,y:0.0}},
             f_offset: OffsetState::default()
             }
@@ -238,6 +241,7 @@ trait MatrixView{
 
 impl event::EventHandler for Grid {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        self.sys_time = Some(SystemTime::now());
         //let ten_seconds = time::Duration::from_secs(10);
         //thread::sleep(ten_seconds);
 
@@ -250,10 +254,11 @@ impl event::EventHandler for Grid {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, GREY!());
-
         self.f_subview.draw(ctx)?;
-
         graphics::present(ctx)?;
+
+        let time_lapse = self.sys_time.unwrap().elapsed().expect("System clock did something funny");
+        println!("Time elapsed: {}ms",time_lapse.as_millis());
         Ok(())
     }
 }
