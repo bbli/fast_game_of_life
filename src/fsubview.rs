@@ -4,6 +4,8 @@ use ggez::{Context, GameResult};
 //use ggez::nalgebra as na;
 use nalgebra::geometry::Point2;
 use super::*;
+#[cfg(test)]
+use mocktopus::macros::*;
 
 pub struct SpriteBatchHandler{
     spritebatch: spritebatch::SpriteBatch,
@@ -13,16 +15,6 @@ pub struct SpriteBatchHandler{
     handle_list: Vec<spritebatch::SpriteIdx>
 }
 
-//impl SpriteBatchHandler{
-    //fn set_correct(&mut self,i:i32,j:i32){
-        //let sprite_handle = self.handle_list.at(i,j).unwrap();
-        //self.spritebatch.set(sprite_handle,new_cell(i,j));
-    //}
-    //fn set_invalid(&mut self,i:i32,j:i32){
-        //let sprite_handle = self.handle_list.at(i,j).unwrap();
-        //self.spritebatch.set(sprite_handle,new_cell(INVALID_X,INVALID_Y));
-    //}
-//}
 pub struct FSubview{
     pub black_sb_handler: SpriteBatchHandler,
     pub white_sb_handler: SpriteBatchHandler,
@@ -35,44 +27,107 @@ impl FSubview{
     pub fn startView(&mut self){
         //self.black_sb_handler.spritebatch.clear();
         //self.white_sb_handler.spritebatch.clear();
-        self.mesh_builder = graphics::MeshBuilder::new();
+        //self.mesh_builder = graphics::MeshBuilder::new();
     }
     pub fn addWhiteToView(&mut self,relative_i:i32,relative_j:i32){
         //self.white_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
-        self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),WHITE!());
+        //self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),WHITE!());
+        self.change_to_white(relative_i,relative_j);
     }
     pub fn addBlackToView(&mut self,relative_i:i32,relative_j:i32){
         //self.black_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
-        self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),BLACK!());
+        //self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),BLACK!());
+        self.change_to_black(relative_i,relative_j);
     }
     pub fn endView(&mut self,ctx:&mut Context){
-        self.mesh = self.mesh_builder.build(ctx).expect("Something went wrong during Mesh Building");
+        //self.mesh = self.mesh_builder.build(ctx).expect("Something went wrong during Mesh Building");
     }
     pub fn update_relative_offset(&mut self,x:f32,y:f32){
         self.relative_offset.x = x;
         self.relative_offset.y = y;
     }
-    // NOTE: Is setting costly? If so, should only set if location actually changes
-    //pub fn change_to_black(&mut self,i: i32, j: i32){
-        ////set corresponding black sprite to correct location given i,j
-        //self.black_sb_handler.set_correct(i,j);
-        //// set corresponding white sprite to invalid location
-        //self.white_sb_handler.set_invalid(i,j);
-    //}
-    //pub fn change_to_white(&mut self, i: i32, j: i32){
-        //self.white_sb_handler.set_correct(i,j);
-        //self.black_sb_handler.set_invalid(i,j);
-    //}
     pub fn drawView(&self,ctx: &mut Context)-> GameResult{
         //println!("Relative offset x: {}",self.relative_offset.x);
         //println!("Relative offset y: {}",self.relative_offset.y);
         let offset_draw_param = DrawParam::new()
                             .dest(Point2::new(-self.relative_offset.x,-self.relative_offset.y));
-        //match graphics::draw(ctx, &self.black_sb_handler.spritebatch ,offset_draw_param){
-            //Ok(value) => graphics::draw(ctx, &self.white_sb_handler.spritebatch ,offset_draw_param),
-            //Err(x) => Err(x)
-        //}
-        graphics::draw(ctx,&self.mesh,offset_draw_param)
+        match graphics::draw(ctx, &self.black_sb_handler.spritebatch ,offset_draw_param){
+            Ok(value) => graphics::draw(ctx, &self.white_sb_handler.spritebatch ,offset_draw_param),
+            Err(x) => Err(x)
+        }
+        //graphics::draw(ctx,&self.mesh,offset_draw_param)
+    }
+}
+
+impl FSubview{
+    // NOTE: Is setting costly? If so, should only set if location actually changes
+    fn change_to_black(&mut self,relative_i: i32, relative_j: i32){
+        //set corresponding black sprite to correct location given i,j
+        self.black_sb_handler.set_correct(relative_i,relative_j);
+        // set corresponding white sprite to invalid location
+        self.white_sb_handler.set_invalid(relative_i,relative_j);
+    }
+    fn change_to_white(&mut self, relative_i: i32, relative_j: i32){
+        self.white_sb_handler.set_correct(relative_i,relative_j);
+        self.black_sb_handler.set_invalid(relative_i,relative_j);
+    }
+}
+
+#[mockable]
+impl SpriteBatchHandler{
+    pub fn new(image: Image) -> SpriteBatchHandler{
+
+            let mut spritebatch = spritebatch::SpriteBatch::new(image);
+
+            let mut handle_list = Vec::new();
+            handle_list.reserve((NUM_BLOCKS_WIDTH*NUM_BLOCKS_HEIGHT)as usize);
+            //// Create x axis first since in graphics first index corresponds with 
+            //// the column, not row
+            for j in 0..NUM_BLOCKS_HEIGHT {
+                for i in 0..NUM_BLOCKS_WIDTH{
+                    let sprite_idx = spritebatch.add(new_cell(INVALID_X,INVALID_Y));
+                    handle_list.push(sprite_idx);
+                    //handle_list.0.push(spritebatch.add(new_cell(i,j)));
+                }
+            }
+            SpriteBatchHandler{
+                spritebatch,
+                handle_list
+            }
+    }
+        fn set_correct(&mut self,relative_i:i32,relative_j:i32){
+            let sprite_handle = self.handle_list.at(relative_i,relative_j).unwrap();
+            self.spritebatch.set(sprite_handle,new_cell(relative_i,relative_j)).unwrap();
+        }
+        fn set_invalid(&mut self,relative_i:i32,relative_j:i32){
+            let sprite_handle = self.handle_list.at(relative_i,relative_j).unwrap();
+            self.spritebatch.set(sprite_handle,new_cell(INVALID_X,INVALID_Y)).unwrap();
+        }
+    }
+//Not Nesscary anymore since we just create new batch everytime now
+impl MatrixView for Vec<spritebatch::SpriteIdx>{
+    type Item= spritebatch::SpriteIdx;
+    fn at(&self,i:i32, j:i32)-> GameResult<Self::Item>{
+        if i < 0 || j < 0 {
+            Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
+        }
+        else if i >= NUM_BLOCKS_WIDTH || j>= NUM_BLOCKS_HEIGHT {
+            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT)))
+        }
+        else{
+            Ok(self[(j*NUM_BLOCKS_WIDTH+ i) as usize])
+        }
+    }
+    fn at_mut<'a>(&'a mut self,i:i32, j:i32)-> GameResult<&'a mut Self::Item>{
+        if i < 0 || j < 0 {
+            Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
+        }
+        else if i >= NUM_BLOCKS_WIDTH || j>= NUM_BLOCKS_HEIGHT {
+            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT)))
+        }
+        else{
+            Ok(&mut self[(j*NUM_BLOCKS_WIDTH + i) as usize])
+        }
     }
 }
 //pub enum CellState{
@@ -88,60 +143,7 @@ pub fn new_cell(i:i32, j:i32) -> DrawParam{
               )
 }
 
-pub fn create_init_SpriteBatchHandler(image:Image, ctx:&mut Context) -> SpriteBatchHandler{
 
-        let mut spritebatch = spritebatch::SpriteBatch::new(image);
-
-        let mut handle_list = Vec::new();
-        //handle_list.reserve((GRID_SIZE*GRID_SIZE)as usize);
-        //// Create x axis first since in graphics first index corresponds with 
-        //// the column, not row
-        //for j in 0..GRID_SIZE {
-            //for i in 0..GRID_SIZE{
-                ////let sprite_idx = if black { spritebatch.add(new_cell(i,j))}
-                                ////else {spritebatch.add(new_cell(INVALID_X,INVALID_Y))};
-                //let sprite_idx = spritebatch.add(new_cell(i,j));
-                ////if j < 2{
-                    ////println!("{:#?}",sprite_idx);
-                ////}
-                //handle_list.push(sprite_idx);
-                ////handle_list.0.push(spritebatch.add(new_cell(i,j)));
-            //}
-        //}
-        SpriteBatchHandler{
-            spritebatch,
-            handle_list
-        }
-}
-
-//Not Nesscary anymore since we just create new batch everytime now
-//impl MatrixView for Vec<spritebatch::SpriteIdx>{
-    //type Item= spritebatch::SpriteIdx;
-    //fn at(&self,i:i32, j:i32)-> GameResult<Self::Item>{
-        //if i < 0 || j < 0 {
-            //Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
-        //}
-        //else if i >= GRID_SIZE || j>= GRID_SIZE {
-        ////if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
-            //Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
-        //}
-        //else{
-            //Ok(self[(j*GRID_SIZE+ i) as usize].clone())
-        //}
-    //}
-    //fn at_mut<'a>(&'a mut self,i:i32, j:i32)-> GameResult<&'a mut Self::Item>{
-        //if i < 0 || j < 0 {
-            //Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
-        //}
-        //else if i >= GRID_SIZE || j>= GRID_SIZE {
-        ////if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
-            //Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
-        //}
-        //else{
-            //Ok(&mut self[(j*GRID_SIZE + i) as usize])
-        //}
-    //}
-//}
 pub fn get_vertical_range_of_view(y:f32)->(i32,i32){
     (get_base_index_top(y),get_base_index_bottom(y+WINDOW_HEIGHT as f32))
 }
@@ -230,7 +232,10 @@ pub fn get_distance_to_left(offset_x:f32,left_idx:i32)->GameResult<f32>{
 
 #[cfg(test)]
 mod tests {
+    use mocktopus::mocking::*;
     use crate::tests::*;
+    use super::*;
+
     #[test]
     fn test_bounding_space_vertical(){
         let height = CELL_SIZE/2.0+CELL_GAP/2.0;
@@ -260,7 +265,6 @@ mod tests {
         assert_eq!(left_idx,0);
         assert_eq!(right_idx,2);
     }
-
     #[test]
     fn test_bounding_space_edge_case_at_origin_y(){
         let height = 2.0*(CELL_SIZE+CELL_GAP)+CELL_SIZE/2.0;
@@ -286,6 +290,8 @@ mod tests {
         let bottom_idx = fsubview::get_base_index_right(offset_y+height as f32);
         assert_eq!(bottom_idx,(GRID_SIZE-1) as i32);
     }
+
+
     #[test]
     fn test_get_distance_to_top_inside(){
         let offset_y = CELL_SIZE+CELL_GAP+CELL_SIZE/3.0;
@@ -293,7 +299,6 @@ mod tests {
         let top_idx = 1;
         assert_approx_eq!(fsubview::get_distance_to_top(offset_y,top_idx).unwrap(), CELL_SIZE/3.0,1e-3f32);
     }
-
     #[test]
     fn test_get_distance_to_top_empty(){
         let offset_y = CELL_SIZE+CELL_GAP/3.0;
@@ -314,5 +319,54 @@ mod tests {
         // based off variable above
         let left_idx = 0;
         assert_approx_eq!(fsubview::get_distance_to_left(offset_x,left_idx).unwrap(), CELL_SIZE+CELL_GAP/2.5,1e-3f32);
+    }
+
+
+    #[test]
+    fn test_mock_safe_overrides_nested_method(){
+        SpriteBatchHandler::new.mock_safe(|image|{
+            let mut spritebatch = spritebatch::SpriteBatch::new(image);
+            let mut handle_list = Vec::new();
+            let sprite_idx = spritebatch.add(new_cell(INVALID_X,INVALID_Y));
+            handle_list.push(sprite_idx);
+            MockResult::Return(SpriteBatchHandler{
+                spritebatch,
+                handle_list
+            })
+        });
+
+        let mut globals = setup().unwrap();
+        let black_image = Image::solid(&mut globals.ctx,CELL_SIZE as u16,BLACK!()).unwrap();
+        let sprite_handler = SpriteBatchHandler::new(black_image);
+        assert_eq!(sprite_handler.handle_list.len(),1);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_change_to_white(){
+        Grid::update_view.mock_safe(|my_self: &mut Grid, ctx: &mut Context|{
+            // change one of the blocks to white now -> 
+            // Assumes SpriteBatchHandler::new sets everything to invalid at first
+            my_self.f_subview.change_to_white(0,0);
+            MockResult::Return(Ok(()))
+        });
+
+        let mut globals = setup().unwrap();
+        // 2. then change back to white
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+    }
+    #[test]
+    #[ignore]
+    fn test_change_to_black(){
+        Grid::update_view.mock_safe(|my_self: &mut Grid, ctx: &mut Context|{
+            // change one of the blocks to black now -> 
+            // Assumes SpriteBatchHandler::new sets everything to invalid at first
+            my_self.f_subview.change_to_black(20,20);
+            MockResult::Return(Ok(()))
+        });
+
+        let mut globals = setup().unwrap();
+        // 2. then change back to white
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
 }

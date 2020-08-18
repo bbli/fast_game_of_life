@@ -1,3 +1,5 @@
+#![cfg_attr(test, feature(proc_macro_hygiene))]
+
 #![allow(non_snake_case)]
 #![warn(clippy::all)]
 //! The simplest possible example that does something.
@@ -25,6 +27,8 @@ use user::OffsetState;
 
 mod setup;
 //use fsubview;
+#[cfg(test)]
+use mocktopus::macros::*;
 // ************  Frontend Globals  ************
 const WINDOW_WIDTH: usize = 1920;
 const WINDOW_HEIGHT: usize = 1080;
@@ -48,17 +52,17 @@ const EPSILON: f32 = 1e-2f32;
 // ```
 
 // 2. Base off exact formula above, +3/4 will be safe
-//const NUM_BLOCKS_WIDTH: usize = ((WINDOW_WIDTH as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as usize;
-//const NUM_BLOCKS_HEIGHT: usize = ((WINDOW_HEIGHT as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as usize;
+const NUM_BLOCKS_WIDTH: i32 = ((WINDOW_WIDTH as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as i32;
+const NUM_BLOCKS_HEIGHT: i32 = ((WINDOW_HEIGHT as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as i32;
 
 // 3. Unfortunately, Rust currently does not support compile time if,
 // so just hardcode a number for the grid size
 //const GRID_SIZE: usize >= std::cmp::max(NUM_BLOCKS_HEIGHT, NUM_BLOCKS_WIDTH);
-static GRID_SIZE: i32 = 200;
+const GRID_SIZE: i32 = 200;
 
 
-//const INVALID_X: i32 = 2*GRID_SIZE;
-//const INVALID_Y: i32 = 2*GRID_SIZE;
+const INVALID_X: i32 = 2*GRID_SIZE;
+const INVALID_Y: i32 = 2*GRID_SIZE;
 
 // ************  Macros  ************
 #[macro_export]
@@ -100,6 +104,9 @@ pub struct Point{
 }
 impl Point{
     pub fn new(x:f32,y:f32)->Point{
+        if x < 0.0 || y < 0.0{
+            panic!("Point needs to be positive in both dimensions");
+        }
         Point{x,y}
     }
 }
@@ -123,6 +130,7 @@ fn new_rect(i: i32, j: i32) -> Rect {
 }
 
 
+#[mockable]
 impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
     fn new(ctx: &mut Context) -> GameResult<Grid> {
@@ -142,13 +150,12 @@ impl Grid {
 
         // ************  SPRITE METHOD  ************   
         //let image = Image::from_rgba8(ctx, CELL_SIZE as u16, CELL_SIZE as u16,&BLACK());
-
+        // create both handles with invalid locations for all sprites
         let white_image = Image::solid(ctx,CELL_SIZE as u16,WHITE!()).unwrap();
-        let white_sb_handler = fsubview::create_init_SpriteBatchHandler(white_image,ctx);
+        let white_sb_handler = fsubview::SpriteBatchHandler::new(white_image);
 
-        // this should override the white color set above
         let black_image = Image::solid(ctx,CELL_SIZE as u16,BLACK!()).unwrap();
-        let black_sb_handler = fsubview::create_init_SpriteBatchHandler(black_image,ctx);
+        let black_sb_handler = fsubview::SpriteBatchHandler::new(black_image);
         
         Ok(Grid{
             b_matrix, 
@@ -176,6 +183,8 @@ impl Grid {
         let (top_idx,bottom_idx) = fsubview::get_vertical_range_of_view(offset_point.y);
         let (left_idx,right_idx) = fsubview::get_horizontal_range_of_view(offset_point.x);
 
+        println!("Vertical Range: {}",bottom_idx-top_idx);
+        println!("Horizontal Range: {}",right_idx-left_idx);
         //println!("Top idx: {}",top_idx);
         //println!("Bottom idx: {}",bottom_idx);
         //println!("Left idx: {}",left_idx);
