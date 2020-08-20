@@ -22,6 +22,7 @@ struct SpriteBatchHandler{
 pub struct FSubview{
     black_sb_handler: SpriteBatchHandler,
     white_sb_handler: SpriteBatchHandler,
+    // Note: relative_offset should be positive -> draw will take care of negative
     relative_offset: Point,
     sw_horizontal_sections: i32,
     sw_vertical_sections: i32,
@@ -76,19 +77,19 @@ impl FSubview{
         })
     }
     pub fn startView(&mut self){
-        //self.black_sb_handler.spritebatch.clear();
-        //self.white_sb_handler.spritebatch.clear();
+        self.black_sb_handler.spritebatch.clear();
+        self.white_sb_handler.spritebatch.clear();
         //self.mesh_builder = graphics::MeshBuilder::new();
     }
     pub fn addWhiteToView(&mut self,relative_i:i32,relative_j:i32){
-        //self.white_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
+        self.white_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
         //self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),WHITE!());
-        self.change_to_white(relative_i,relative_j);
+        //self.change_to_white(relative_i,relative_j);
     }
     pub fn addBlackToView(&mut self,relative_i:i32,relative_j:i32){
-        //self.black_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
+        self.black_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
         //self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),BLACK!());
-        self.change_to_black(relative_i,relative_j);
+        //self.change_to_black(relative_i,relative_j);
     }
     pub fn endView(&mut self,ctx:&mut Context){
         //self.mesh = self.mesh_builder.build(ctx).expect("Something went wrong during Mesh Building");
@@ -110,7 +111,7 @@ impl FSubview{
     }
 }
 
-#[mockable]
+//#[mockable]
 impl FSubview{
     // NOTE: Is setting costly? If so, should only set if location actually changes
     fn change_to_black(&mut self,relative_i: i32, relative_j: i32){
@@ -141,7 +142,6 @@ impl FSubview{
     }
 
     pub fn get_vertical_window_range(&self, y_top: f32, y_bottom: f32)->(i32,i32){
-        let y_bottom = y_top + WINDOW_HEIGHT as f32;
         let num_sections_crossed = (y_bottom/ (CELL_SIZE+CELL_GAP)).ceil() as i32;
 
         let top_idx:i32;
@@ -159,7 +159,7 @@ impl FSubview{
     }
 }
 
-#[mockable]
+//#[mockable]
 impl SpriteBatchHandler{
     pub fn new(image: Image, sw_horizontal_sections: i32, sw_vertical_sections: i32 ) -> SpriteBatchHandler{
 
@@ -448,7 +448,7 @@ mod tests {
         Grid::update_view.mock_safe(|my_self: &mut Grid, ctx: &mut Context|{
             // change one of the blocks to white now -> 
             // Assumes SpriteBatchHandler::new sets everything to invalid at first
-            my_self.f_subview.change_to_white(0,0);
+            my_self.f_subview.change_to_white(20,20);
             MockResult::Return(Ok(()))
         });
 
@@ -511,5 +511,22 @@ mod tests {
         let right_edge_of_view = (GRID_SIZE-1) as f32 * (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
         let (left_idx,right_idx) = globals.grid.f_subview.get_horizontal_window_range(0.0, right_edge_of_view);
         assert_eq!(right_idx,GRID_SIZE-1);
+    }
+    #[test]
+    fn test_get_vertical_window_range_small_window(){
+        let globals = setup().unwrap();
+
+        let (left_idx,right_idx) = globals.grid.f_subview.get_vertical_window_range(0.0, WINDOW_HEIGHT as f32/2.0);
+        assert_eq!(left_idx,0);
+        assert_eq!(right_idx,globals.grid.f_subview.sw_vertical_sections-1);
+    }
+
+    #[test]
+    fn test_get_vertical_window_range_large_window(){
+        let globals = setup().unwrap();
+
+        let bottom_edge_of_view = (GRID_SIZE-1) as f32 * (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
+        let (top_idx,bottom_idx) = globals.grid.f_subview.get_vertical_window_range(0.0, bottom_edge_of_view);
+        assert_eq!(bottom_idx,GRID_SIZE-1);
     }
 }

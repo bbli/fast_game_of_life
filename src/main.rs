@@ -118,7 +118,7 @@ pub struct Grid {
     sys_time: Option<SystemTime>,
     f_subview: FSubview,
     // TODO: change name to user
-    f_offset: OffsetState,
+    f_user_offset: OffsetState,
 }
 
 fn new_rect(i: i32, j: i32) -> Rect {
@@ -133,7 +133,7 @@ fn new_rect(i: i32, j: i32) -> Rect {
 }
 
 
-#[mockable]
+//#[mockable]
 impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
     fn new(ctx: &mut Context) -> GameResult<Grid> {
@@ -141,13 +141,13 @@ impl Grid {
         let b_matrix = BMatrix::new();
         let sys_time = None;
         let f_subview = FSubview::new(ctx)?;
-        let f_offset = OffsetState::default();
+        let f_user_offset = OffsetState::default();
     
         Ok(Grid{
             b_matrix, 
             sys_time,
             f_subview,
-            f_offset
+            f_user_offset
             }
         )
     }
@@ -159,14 +159,14 @@ impl Grid {
 
     // NOTE: Please initialize to a region inside
     fn init_offset(mut self, x:f32, y:f32) -> Self{
-        self.f_offset = OffsetState::Inside(Point::new(x,y));
+        self.f_user_offset = OffsetState::Inside(Point::new(x,y));
         self
     }
 
     // Invariant Sliding Window Version
     fn update_view(&mut self, ctx: &mut Context) -> GameResult{
         // 1. get bounding boxes
-        let offset_point = self.f_offset.get_point();
+        let offset_point = self.f_user_offset.get_point();
         let (left_idx,right_idx) = self.f_subview.get_horizontal_window_range(offset_point.x,offset_point.x+WINDOW_WIDTH as f32);
         let (top_idx,bottom_idx) = self.f_subview.get_vertical_window_range(offset_point.y,offset_point.y+WINDOW_HEIGHT as f32);
 
@@ -200,7 +200,7 @@ impl Grid {
     // Smallest Bounding Sliding Window Version
     //fn update_view(&mut self,ctx:&mut Context)->GameResult{
         //// 1. get bounding boxes
-        //let offset_point = self.f_offset.get_point();
+        //let offset_point = self.f_user_offset.get_point();
         //let (top_idx,bottom_idx) = fsubview::get_vertical_range_of_view(offset_point.y);
         //let (left_idx,right_idx) = fsubview::get_horizontal_range_of_view(offset_point.x);
 
@@ -239,16 +239,16 @@ impl Grid {
 
     fn update_offset(&mut self, ctx: &mut Context){
         if keyboard::is_key_pressed(ctx,KeyCode::Right){
-            self.f_offset = user::transition_offset_state_right(self.f_offset);
+            self.f_user_offset = user::transition_offset_state_right(self.f_user_offset);
         }
         if keyboard::is_key_pressed(ctx,KeyCode::Left){
-            self.f_offset = user::transition_offset_state_left(self.f_offset);
+            self.f_user_offset = user::transition_offset_state_left(self.f_user_offset);
         }
         if keyboard::is_key_pressed(ctx,KeyCode::Up){
-            self.f_offset = user::transition_offset_state_up(self.f_offset);
+            self.f_user_offset = user::transition_offset_state_up(self.f_user_offset);
         }
         if keyboard::is_key_pressed(ctx,KeyCode::Down){
-            self.f_offset = user::transition_offset_state_down(self.f_offset);
+            self.f_user_offset = user::transition_offset_state_down(self.f_user_offset);
         }
     }
 }
