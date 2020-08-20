@@ -38,6 +38,8 @@ const CELL_SIZE: f32 = 20.0;
 const CELL_GAP: f32 = CELL_SIZE / 6.0;
 const EPSILON: f32 = 1e-2f32;
 
+//const SW_HORIZONTAL_SECTIONS:i32 = ((CELL_SIZE+CELL_GAP+WINDOW_WIDTH as f32)/(CELL_SIZE+CELL_GAP)).ceil() as i32;
+
 // ************  Backend Globals  ************
 // 1. Some code may be reliant(update_view) on this number being bigger than max(NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT), which is an approximation to worst case scenario, whose function is also provided below
 // ```
@@ -52,8 +54,8 @@ const EPSILON: f32 = 1e-2f32;
 // ```
 
 // 2. Base off exact formula above, +3/4 will be safe
-const NUM_BLOCKS_WIDTH: i32 = ((WINDOW_WIDTH as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as i32;
-const NUM_BLOCKS_HEIGHT: i32 = ((WINDOW_HEIGHT as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as i32;
+//const NUM_BLOCKS_WIDTH: i32 = ((WINDOW_WIDTH as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as i32;
+//const NUM_BLOCKS_HEIGHT: i32 = ((WINDOW_HEIGHT as f32 / (CELL_SIZE as f32 + CELL_GAP)) + 3.0) as i32;
 
 // 3. Unfortunately, Rust currently does not support compile time if,
 // so just hardcode a number for the grid size
@@ -115,6 +117,7 @@ pub struct Grid {
     b_matrix: BMatrix,
     sys_time: Option<SystemTime>,
     f_subview: FSubview,
+    // TODO: change name to user
     f_offset: OffsetState,
 }
 
@@ -137,31 +140,14 @@ impl Grid {
         
         let b_matrix = BMatrix::new();
         let sys_time = None;
+        let f_subview = FSubview::new(ctx)?;
+        let f_offset = OffsetState::default();
     
-        // ************  MESH BUILDER METHOD  ************   
-        let mut f_mesh = graphics::MeshBuilder::new();
-
-        for i in 0..GRID_SIZE {
-            for j in 0..GRID_SIZE {
-                f_mesh.rectangle(DrawMode::fill(), new_rect(i, j), BLACK!());
-            }
-        }
-        let f_mesh = f_mesh.build(ctx)?;
-
-        // ************  SPRITE METHOD  ************   
-        //let image = Image::from_rgba8(ctx, CELL_SIZE as u16, CELL_SIZE as u16,&BLACK());
-        // create both handles with invalid locations for all sprites
-        let white_image = Image::solid(ctx,CELL_SIZE as u16,WHITE!()).unwrap();
-        let white_sb_handler = fsubview::SpriteBatchHandler::new(white_image);
-
-        let black_image = Image::solid(ctx,CELL_SIZE as u16,BLACK!()).unwrap();
-        let black_sb_handler = fsubview::SpriteBatchHandler::new(black_image);
-        
         Ok(Grid{
             b_matrix, 
             sys_time,
-            f_subview: FSubview{black_sb_handler,white_sb_handler,relative_offset: Point{x:0.0,y:0.0},mesh: f_mesh,mesh_builder: graphics::MeshBuilder::new()},
-            f_offset: OffsetState::default(),
+            f_subview,
+            f_offset
             }
         )
     }
@@ -177,18 +163,12 @@ impl Grid {
         self
     }
 
-    fn update_view(&mut self,ctx:&mut Context)->GameResult{
+    // Invariant Sliding Window Version
+    fn update_view(&mut self, ctx: &mut Context) -> GameResult{
         // 1. get bounding boxes
         let offset_point = self.f_offset.get_point();
-        let (top_idx,bottom_idx) = fsubview::get_vertical_range_of_view(offset_point.y);
-        let (left_idx,right_idx) = fsubview::get_horizontal_range_of_view(offset_point.x);
-
-        println!("Vertical Range: {}",bottom_idx-top_idx);
-        println!("Horizontal Range: {}",right_idx-left_idx);
-        //println!("Top idx: {}",top_idx);
-        //println!("Bottom idx: {}",bottom_idx);
-        //println!("Left idx: {}",left_idx);
-        //println!("right idx: {}",right_idx);
+        let (left_idx,right_idx) = self.f_subview.get_horizontal_window_range(offset_point.x);
+        let (top_idx,bottom_idx) = self.f_subview.get_vertical_window_range(offset_point.y);
 
         // 2. now draw from base_index_top -> base_index_bottom, inclusive
         self.f_subview.startView();
@@ -208,6 +188,7 @@ impl Grid {
             }
         }
         self.f_subview.endView(ctx);
+
         // 3. finally define new relative offset
         // aka relative to the box at (left_idx,top_idx)
         let rel_offset_y = fsubview::get_distance_to_top(offset_point.y,top_idx)?;
@@ -215,6 +196,46 @@ impl Grid {
         self.f_subview.update_relative_offset(rel_offset_x,rel_offset_y);
         Ok(())
     }
+
+    // Smallest Bounding Sliding Window Version
+    //fn update_view(&mut self,ctx:&mut Context)->GameResult{
+        //// 1. get bounding boxes
+        //let offset_point = self.f_offset.get_point();
+        //let (top_idx,bottom_idx) = fsubview::get_vertical_range_of_view(offset_point.y);
+        //let (left_idx,right_idx) = fsubview::get_horizontal_range_of_view(offset_point.x);
+
+        //println!("Vertical Range: {}",bottom_idx-top_idx);
+        //println!("Horizontal Range: {}",right_idx-left_idx);
+        ////println!("Top idx: {}",top_idx);
+        ////println!("Bottom idx: {}",bottom_idx);
+        ////println!("Left idx: {}",left_idx);
+        ////println!("right idx: {}",right_idx);
+
+        //// 2. now draw from base_index_top -> base_index_bottom, inclusive
+        //self.f_subview.startView();
+        //for j in top_idx..bottom_idx+1{
+            //let relative_j = j - top_idx;
+            //for i in left_idx..right_idx+1{
+                //let relative_i = i - left_idx;
+
+                //if self.b_matrix.at(i,j)?{
+                    ////self.f_subview.change_to_white(i,j);
+                    //self.f_subview.addWhiteToView(relative_i,relative_j);
+                //}
+                //else{
+                    ////self.f_subview.change_to_black(i,j);
+                    //self.f_subview.addBlackToView(relative_i,relative_j);
+                //}
+            //}
+        //}
+        //self.f_subview.endView(ctx);
+        //// 3. finally define new relative offset
+        //// aka relative to the box at (left_idx,top_idx)
+        //let rel_offset_y = fsubview::get_distance_to_top(offset_point.y,top_idx)?;
+        //let rel_offset_x = fsubview::get_distance_to_left(offset_point.x,left_idx)?;
+        //self.f_subview.update_relative_offset(rel_offset_x,rel_offset_y);
+        //Ok(())
+    //}
 
     fn update_offset(&mut self, ctx: &mut Context){
         if keyboard::is_key_pressed(ctx,KeyCode::Right){
