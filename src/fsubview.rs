@@ -8,7 +8,7 @@ use super::*;
 #[cfg(test)]
 use mocktopus::macros::*;
 
-pub struct SpriteBatchHandler{
+struct SpriteBatchHandler{
     spritebatch: spritebatch::SpriteBatch,
     // we needs this vec b/c SpriteIdx wraps around a private field
     // so we can't dynamically construct the SpriteIdx ourselves when
@@ -20,14 +20,14 @@ pub struct SpriteBatchHandler{
 
 /// responsible for drawing onto the canvas
 pub struct FSubview{
-    pub black_sb_handler: SpriteBatchHandler,
-    pub white_sb_handler: SpriteBatchHandler,
-    pub relative_offset: Point,
+    black_sb_handler: SpriteBatchHandler,
+    white_sb_handler: SpriteBatchHandler,
+    relative_offset: Point,
     sw_horizontal_sections: i32,
     sw_vertical_sections: i32,
 
-    pub mesh_builder: graphics::MeshBuilder,
-    pub mesh: graphics::Mesh
+    mesh_builder: graphics::MeshBuilder,
+    mesh: graphics::Mesh
 }
 
  //Sliding Window Setup
@@ -110,6 +110,7 @@ impl FSubview{
     }
 }
 
+#[mockable]
 impl FSubview{
     // NOTE: Is setting costly? If so, should only set if location actually changes
     fn change_to_black(&mut self,relative_i: i32, relative_j: i32){
@@ -122,8 +123,7 @@ impl FSubview{
         self.white_sb_handler.set_correct(relative_i,relative_j);
         self.black_sb_handler.set_invalid(relative_i,relative_j);
     }
-    pub fn get_horizontal_window_range(&self,x_left: f32)-> (i32,i32){
-        let x_right = x_left+WINDOW_WIDTH as f32;
+    pub fn get_horizontal_window_range(&self,x_left: f32, x_right: f32)-> (i32,i32){
         let num_sections_crossed = (x_right/ (CELL_SIZE+CELL_GAP)).ceil() as i32;
 
         let left_idx:i32;
@@ -140,7 +140,7 @@ impl FSubview{
         (left_idx,right_idx)
     }
 
-    pub fn get_vertical_window_range(&self, y_top: f32)->(i32,i32){
+    pub fn get_vertical_window_range(&self, y_top: f32, y_bottom: f32)->(i32,i32){
         let y_bottom = y_top + WINDOW_HEIGHT as f32;
         let num_sections_crossed = (y_bottom/ (CELL_SIZE+CELL_GAP)).ceil() as i32;
 
@@ -469,5 +469,47 @@ mod tests {
         let mut globals = setup().unwrap();
         // 2. then change back to white
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+    }
+
+    #[should_panic]
+    #[test]
+    fn test_SpriteBatchHandler_at_outOfBounds(){
+        let globals = setup().unwrap();
+
+        // This test is contigent on Grid::new initalizing 
+        // columns first
+        let sw_horizontal_sections = globals.grid.f_subview.sw_horizontal_sections;
+        globals.grid.f_subview.white_sb_handler.at(sw_horizontal_sections,1).unwrap();
+    }
+    #[test]
+    fn test_SpriteBatchHandler_at_rightAtEdge(){
+        let globals = setup().unwrap();
+
+        // This test is contigent on Grid::new initalizing 
+        // columns first
+        let sw_horizontal_sections = globals.grid.f_subview.sw_horizontal_sections;
+        let sw_vertical_sections = globals.grid.f_subview.sw_vertical_sections;
+        globals.grid.f_subview.white_sb_handler.at(sw_horizontal_sections-1,sw_vertical_sections-1).unwrap();
+    }
+
+    // NOTE: not the best way to test as I am replacing the entire functions just for the sake of
+    // manipulating a global variable. But it's either this 2) or make the global variable
+    // static/mutable 3)or pass global variable in as a function argument
+    #[test]
+    fn test_get_horizontal_window_range_small_window(){
+        let globals = setup().unwrap();
+
+        let (left_idx,right_idx) = globals.grid.f_subview.get_horizontal_window_range(0.0, WINDOW_WIDTH as f32/2.0);
+        assert_eq!(left_idx,0);
+        assert_eq!(right_idx,globals.grid.f_subview.sw_horizontal_sections-1);
+    }
+
+    #[test]
+    fn test_get_horizontal_window_range_large_window(){
+        let globals = setup().unwrap();
+
+        let right_edge_of_view = (GRID_SIZE-1) as f32 * (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
+        let (left_idx,right_idx) = globals.grid.f_subview.get_horizontal_window_range(0.0, right_edge_of_view);
+        assert_eq!(right_idx,GRID_SIZE-1);
     }
 }

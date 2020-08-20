@@ -167,8 +167,8 @@ impl Grid {
     fn update_view(&mut self, ctx: &mut Context) -> GameResult{
         // 1. get bounding boxes
         let offset_point = self.f_offset.get_point();
-        let (left_idx,right_idx) = self.f_subview.get_horizontal_window_range(offset_point.x);
-        let (top_idx,bottom_idx) = self.f_subview.get_vertical_window_range(offset_point.y);
+        let (left_idx,right_idx) = self.f_subview.get_horizontal_window_range(offset_point.x,offset_point.x+WINDOW_WIDTH as f32);
+        let (top_idx,bottom_idx) = self.f_subview.get_vertical_window_range(offset_point.y,offset_point.y+WINDOW_HEIGHT as f32);
 
         // 2. now draw from base_index_top -> base_index_bottom, inclusive
         self.f_subview.startView();
@@ -398,17 +398,6 @@ mod tests {
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
 
-    //#[test]
-    //fn test_FSubview_at(){
-        //let globals = setup().unwrap();
-
-        //// This test is contigent on Grid::new initalizing 
-        //// columns first
-        //let value = globals.grid.f_subview.at(3,1).unwrap();
-        //let expected_value = 1*GRID_SIZE + 3;
-        //println!("Expected value should be: {}. Actual value is: {:?}",expected_value,value);
-        ////assert_eq!(value,1*GRID_SIZE+3);
-    //}
 
     //#[test]
     //fn test_draw_off_grid_doesnt_panic(){
