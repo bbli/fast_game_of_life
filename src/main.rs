@@ -60,7 +60,7 @@ const EPSILON: f32 = 1e-2f32;
 // 3. Unfortunately, Rust currently does not support compile time if,
 // so just hardcode a number for the grid size
 //const GRID_SIZE: usize >= std::cmp::max(NUM_BLOCKS_HEIGHT, NUM_BLOCKS_WIDTH);
-const GRID_SIZE: i32 = 200;
+const GRID_SIZE: i32 = 2000;
 
 
 const INVALID_X: i32 = 2*GRID_SIZE;

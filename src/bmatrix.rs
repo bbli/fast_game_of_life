@@ -1,4 +1,6 @@
 use std::ops::{Deref,DerefMut};
+use rayon::prelude::*;
+
 // has to be on heap otherwise stack overflow
 pub struct BMatrix(Vec<bool>);
 use super::*;
@@ -22,6 +24,37 @@ impl BMatrix{
     }
 }
 
+fn get_location_from_idx(idx:usize)->(i32,i32){
+    let idx = idx as i32;
+    let i = idx % GRID_SIZE;
+    let j = (idx - i) / GRID_SIZE;
+    (i,j)
+}
+fn par_convert_bool(i:i32,j:i32,b_matrix:&BMatrix)-> u32{
+        match b_matrix.at(i,j){
+            Ok(value) => if value {1}else {0},
+            //EC: off screen
+            Err(_) => 0
+        }
+}
+
+fn par_get_count(i:i32,j:i32,b_matrix: &BMatrix)->u32{
+        let right = par_convert_bool(i+1,j,b_matrix);
+        let down = par_convert_bool(i,j+1,b_matrix);
+        let left = par_convert_bool(i-1,j,b_matrix);
+        let up = par_convert_bool(i,j-1,b_matrix);
+        right + down + left + up
+}
+
+fn par_new_cell_value(i:i32,j:i32,count:u32,b_matrix:&BMatrix) -> bool{
+    let state = b_matrix.at(i,j).unwrap();
+    match state{
+        //dead transition
+        false => {if count== 3 {true} else {false}}
+        //alive transition
+        true => {if count == 2 || count == 3 {true} else {false}}
+    }
+}
 impl BMatrix{
     fn convert_bool(&self,x:i32,y:i32)-> u32{
         match self.at(x,y){
@@ -31,6 +64,7 @@ impl BMatrix{
         }
     }
     // since we are using this to survey around, x and y can now be negative
+    // but "at" method covers this error handling
     fn get_count(&self, i:i32,j:i32)-> u32{
         let right = self.convert_bool(i+1,j);
         let down = self.convert_bool(i,j+1);
@@ -51,16 +85,26 @@ impl BMatrix{
 
     pub fn next_bmatrix(&self)-> BMatrix{
         let mut new_results = BMatrix::new();
-        for j in 0..GRID_SIZE{
-            for i in 0..GRID_SIZE{
-                let i = i as i32;
-                let j = j as i32;
+        // ************  MULTITHREADED THREADS  ************   
+        // 0. allocate threadpool during BMatrix::new()
+        // 1. code to partition grid evenly into num_of_threads(also in setup)
 
-                let count = self.get_count(i,j);
-                let mut new_value_ref = new_results.at_mut(i,j).unwrap();
-                *new_value_ref = self.new_cell_value(i,j,count);
-            }
-        }
+        // 2. start up each thread -> since they have a predefined job
+        // 3. join to wait
+        // ************  MULTITHREADED RAYON  ************   
+        new_results.par_iter_mut().enumerate().for_each(|(idx,value)| {
+            let (i,j) = get_location_from_idx(idx);
+            let count = par_get_count(i,j,&self);
+            *value = par_new_cell_value(i,j,count,&self);
+        });
+        // ************  SINGLE THREADED  ************   
+        //for j in 0..GRID_SIZE{
+            //for i in 0..GRID_SIZE{
+                //let count = self.get_count(i,j);
+                //let mut new_value_ref = new_results.at_mut(i,j).unwrap();
+                //*new_value_ref = self.new_cell_value(i,j,count);
+            //}
+        //}
         new_results
     }
 }
@@ -97,6 +141,7 @@ impl MatrixView for BMatrix{
 #[cfg(test)]
 mod tests {
     use crate::tests::*;
+    use super::*;
     #[test]
     fn test_BMatrix_index_on_subview(){
         let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
@@ -192,5 +237,15 @@ mod tests {
         assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
         assert_eq!(next_bmatrix.at(i,j-1).unwrap(),false);
         assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
+    }
+
+    #[test]
+    fn test_get_location_from_idx(){
+        let i:i32 = 3;
+        let j:i32 = 2;
+        let idx = j*GRID_SIZE+i;
+        let (new_i,new_j) = get_location_from_idx(idx as usize);
+        assert_eq!(i,new_i);
+        assert_eq!(j,new_j);
     }
 }

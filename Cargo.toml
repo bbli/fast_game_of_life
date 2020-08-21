@@ -6,7 +6,7 @@ edition = "2018"
 
 [profile.release]
 opt-level = 3
-debug = 0
+debug = true
 overflow-checks = true
 panic = 'unwind'
 lto = false
@@ -45,6 +45,7 @@ nalgebra="*"
 rand="*"
 assert_approx_eq="*"
 mocktopus="*"
+rayon="*"
 
 #[target.x86_64-unknown-linux-gnu]
 #rustflags = [

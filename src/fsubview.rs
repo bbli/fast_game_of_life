@@ -77,19 +77,19 @@ impl FSubview{
         })
     }
     pub fn startView(&mut self){
-        self.black_sb_handler.spritebatch.clear();
-        self.white_sb_handler.spritebatch.clear();
+        //self.black_sb_handler.spritebatch.clear();
+        //self.white_sb_handler.spritebatch.clear();
         //self.mesh_builder = graphics::MeshBuilder::new();
     }
     pub fn addWhiteToView(&mut self,relative_i:i32,relative_j:i32){
-        self.white_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
+        //self.white_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
         //self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),WHITE!());
-        //self.change_to_white(relative_i,relative_j);
+        self.change_to_white(relative_i,relative_j);
     }
     pub fn addBlackToView(&mut self,relative_i:i32,relative_j:i32){
-        self.black_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
+        //self.black_sb_handler.spritebatch.add(new_cell(relative_i,relative_j));
         //self.mesh_builder.rectangle(DrawMode::fill(),new_rect(relative_i,relative_j),BLACK!());
-        //self.change_to_black(relative_i,relative_j);
+        self.change_to_black(relative_i,relative_j);
     }
     pub fn endView(&mut self,ctx:&mut Context){
         //self.mesh = self.mesh_builder.build(ctx).expect("Something went wrong during Mesh Building");
