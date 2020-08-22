@@ -15,6 +15,8 @@ use ggez::{Context, GameResult};
 
 //use std::{thread,time};
 use std::time::{SystemTime,UNIX_EPOCH};
+use std::ops::Deref;
+use threadpool::ThreadPool;
 
 mod bmatrix;
 use bmatrix::*;
@@ -113,9 +115,15 @@ impl Point{
     }
 }
 
+struct RegionPool{
+    threadpool: ThreadPool,
+    work_region_list: Vec<(i32,i32)>
+}
+
 pub struct Grid {
-    b_matrix: BMatrix,
+    b_matrix: BMatrixVector,
     sys_time: Option<SystemTime>,
+    region_pool: RegionPool,
     f_subview: FSubview,
     // TODO: change name to user
     f_user_offset: OffsetState,
@@ -131,6 +139,46 @@ fn new_rect(i: i32, j: i32) -> Rect {
         CELL_SIZE as f32,
     )
 }
+// Split the grid horizontally so that each thread can index like
+// for j in (start_y,end_y)
+fn partition_grid(threads: i32)->Vec<(i32,i32)>{
+    let mut work_region_list = Vec::new();
+    let num_rows = GRID_SIZE/threads;
+    for i in 0..threads{
+        let start_y;
+        let end_y;
+        if i == threads-1{
+            start_y = i*num_rows;
+            end_y = GRID_SIZE-1;
+        }
+        else{
+            start_y = i*num_rows;
+            end_y = (i+1)*num_rows -1;
+        }
+        work_region_list.push((start_y,end_y))
+    }
+    work_region_list
+}
+
+impl Default for RegionPool{
+    fn default()-> Self{
+        let worker_count:i32 = 8;
+        //let threadpool = Arc::new(ThreadPool::new(worker_count as usize));
+        let threadpool = ThreadPool::new(worker_count as usize);
+        let work_region_list = partition_grid(worker_count);
+        RegionPool{
+            threadpool,
+            work_region_list
+        }
+    }
+}
+
+impl Deref for RegionPool{
+    type Target = ThreadPool;
+    fn deref(&self) -> &Self::Target{
+        &self.threadpool
+    }
+}
 
 
 //#[mockable]
@@ -138,21 +186,23 @@ impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
     fn new(ctx: &mut Context) -> GameResult<Grid> {
         
-        let b_matrix = BMatrix::new();
+        let b_matrix = BMatrixVector::new();
         let sys_time = None;
         let f_subview = FSubview::new(ctx)?;
         let f_user_offset = OffsetState::default();
+        let region_pool = RegionPool::default();
     
         Ok(Grid{
             b_matrix, 
             sys_time,
+            region_pool,
             f_subview,
             f_user_offset
             }
         )
     }
 
-    fn init_seed(mut self, init_bmatrix: BMatrix) -> Self{
+    fn init_seed(mut self, init_bmatrix: BMatrixVector) -> Self{
         self.b_matrix = init_bmatrix;
         self
     }
@@ -161,6 +211,15 @@ impl Grid {
     fn init_offset(mut self, x:f32, y:f32) -> Self{
         self.f_user_offset = OffsetState::Inside(Point::new(x,y));
         self
+    }
+
+    fn updateBackend(&mut self){
+        // 1. Single Threaded
+        //self.b_matrix = self.b_matrix.next_bmatrix();
+        // 2. Multi-Threaded with Rayon
+        //self.b_matrix = self.b_matrix.next_bmatrix_rayon();
+        // 3. Multi-Threaded with ThreadPool
+        self.b_matrix = self.b_matrix.next_bmatrix_threadpool(&self.region_pool)
     }
 
     // Invariant Sliding Window Version
@@ -268,7 +327,8 @@ impl event::EventHandler for Grid {
         //let ten_seconds = time::Duration::from_secs(10);
         //thread::sleep(ten_seconds);
 
-        self.b_matrix = self.b_matrix.next_bmatrix();
+        self.updateBackend();
+
         self.update_offset(ctx);
         // use update b_matrix to update view
         self.update_view(ctx)?;
@@ -295,7 +355,7 @@ pub fn main() -> GameResult {
     //println!("NUM_BLOCKS_HEIGHT2: {}",NUM_BLOCKS_HEIGHT2);
 
     // ************  GRID  ************   
-    let mut init_bmatrix = BMatrix::new();
+    let mut init_bmatrix = BMatrixVector::new();
     setup::make_random(&mut init_bmatrix);
     // ************  GGEZ  ************   
     let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
@@ -359,7 +419,7 @@ mod tests {
     #[ignore]
     fn test_update_view_before_offset(){
         // NOTE: turn off next_bmatrix() before executing this
-        let mut init_bmatrix = BMatrix::new();
+        let mut init_bmatrix = BMatrixVector::new();
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{
                 //make_blinker(i,j,&mut init_bmatrix);
@@ -380,7 +440,7 @@ mod tests {
     fn test_update_view_after_offset(){
         // NOTE: turn off next_bmatrix() before executing this
         println!("GRID_SIZE: {}",GRID_SIZE);
-        let mut init_bmatrix = BMatrix::new();
+        let mut init_bmatrix = BMatrixVector::new();
         // just make part of the screen white
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{

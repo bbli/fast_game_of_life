@@ -2,25 +2,27 @@ use std::ops::{Deref,DerefMut};
 use rayon::prelude::*;
 
 // has to be on heap otherwise stack overflow
-pub struct BMatrix(Vec<bool>);
+pub struct BMatrixVector(Vec<bool>);
+unsafe impl Send for *const BMatrixVector{}
+
 use super::*;
 
-// NOTE: These two may or may not be nesscary
-impl Deref for BMatrix{
+// NOTE: For array indexing
+impl Deref for BMatrixVector{
     type Target = Vec<bool>;
     fn deref(&self) -> &Self::Target{
         &self.0
     }
 }
-impl DerefMut for BMatrix{
+impl DerefMut for BMatrixVector{
     fn deref_mut(&mut self) -> &mut Self::Target{
         &mut self.0
     }
 }
 
-impl BMatrix{
+impl BMatrixVector{
     pub fn new()-> Self{
-        BMatrix(vec![false;(GRID_SIZE*GRID_SIZE) as usize])
+        BMatrixVector(vec![false;(GRID_SIZE*GRID_SIZE) as usize])
     }
 }
 
@@ -30,7 +32,7 @@ fn get_location_from_idx(idx:usize)->(i32,i32){
     let j = (idx - i) / GRID_SIZE;
     (i,j)
 }
-fn par_convert_bool(i:i32,j:i32,b_matrix:&BMatrix)-> u32{
+fn par_convert_bool(i:i32,j:i32,b_matrix:&BMatrixVector)-> u32{
         match b_matrix.at(i,j){
             Ok(value) => if value {1}else {0},
             //EC: off screen
@@ -38,7 +40,7 @@ fn par_convert_bool(i:i32,j:i32,b_matrix:&BMatrix)-> u32{
         }
 }
 
-fn par_get_count(i:i32,j:i32,b_matrix: &BMatrix)->u32{
+fn par_get_count(i:i32,j:i32,b_matrix: &BMatrixVector)->u32{
         let right = par_convert_bool(i+1,j,b_matrix);
         let down = par_convert_bool(i,j+1,b_matrix);
         let left = par_convert_bool(i-1,j,b_matrix);
@@ -46,7 +48,7 @@ fn par_get_count(i:i32,j:i32,b_matrix: &BMatrix)->u32{
         right + down + left + up
 }
 
-fn par_new_cell_value(i:i32,j:i32,count:u32,b_matrix:&BMatrix) -> bool{
+fn par_new_cell_value(i:i32,j:i32,count:u32,b_matrix:&BMatrixVector) -> bool{
     let state = b_matrix.at(i,j).unwrap();
     match state{
         //dead transition
@@ -55,7 +57,7 @@ fn par_new_cell_value(i:i32,j:i32,count:u32,b_matrix:&BMatrix) -> bool{
         true => {if count == 2 || count == 3 {true} else {false}}
     }
 }
-impl BMatrix{
+impl BMatrixVector{
     fn convert_bool(&self,x:i32,y:i32)-> u32{
         match self.at(x,y){
             Ok(value) => if value {1}else {0},
@@ -83,33 +85,65 @@ impl BMatrix{
         }
     }
 
-    pub fn next_bmatrix(&self)-> BMatrix{
-        let mut new_results = BMatrix::new();
-        // ************  MULTITHREADED THREADS  ************   
-        // 0. allocate threadpool during BMatrix::new()
-        // 1. code to partition grid evenly into num_of_threads(also in setup)
+    pub fn next_bmatrix(&self)-> BMatrixVector{
+        let mut new_results = BMatrixVector::new();
 
-        // 2. start up each thread -> since they have a predefined job
-        // 3. join to wait
-        // ************  MULTITHREADED RAYON  ************   
+        for j in 0..GRID_SIZE{
+            for i in 0..GRID_SIZE{
+                let count = self.get_count(i,j);
+                let mut new_value_ref = new_results.at_mut(i,j).unwrap();
+                *new_value_ref = self.new_cell_value(i,j,count);
+            }
+        }
+
+        new_results
+    }
+    pub fn next_bmatrix_rayon(&self) -> BMatrixVector{
+        let mut new_results = BMatrixVector::new();
+
         new_results.par_iter_mut().enumerate().for_each(|(idx,value)| {
             let (i,j) = get_location_from_idx(idx);
             let count = par_get_count(i,j,&self);
             *value = par_new_cell_value(i,j,count,&self);
         });
-        // ************  SINGLE THREADED  ************   
-        //for j in 0..GRID_SIZE{
-            //for i in 0..GRID_SIZE{
-                //let count = self.get_count(i,j);
-                //let mut new_value_ref = new_results.at_mut(i,j).unwrap();
-                //*new_value_ref = self.new_cell_value(i,j,count);
-            //}
-        //}
+
+        new_results
+    }
+    pub fn next_bmatrix_threadpool(&self, region_pool: &RegionPool)-> BMatrixVector{
+        // ************  MULTITHREADED THREADPOOL  ************   
+        let new_results = BMatrixVector::new();
+        // 0. allocate threadpool during Grid::new() DONE
+        // 1. code to partition grid evenly into num_of_threads(also in setup) DONE
+        // 2. start up each thread -> since they have a predefined job
+        for (start_y,end_y) in region_pool.work_region_list.iter(){
+            let start_y = start_y.clone();
+            let end_y = end_y.clone();
+            let vec_ptr = self as *const BMatrixVector;
+
+            region_pool.execute(move ||{
+                for j in start_y..end_y+1{
+                    for i in 0..GRID_SIZE{
+                        let count = (*vec_ptr).get_count(i,j);
+                        let mut new_value_ref = new_results.at_mut(i,j).unwrap();
+                        *new_value_ref = (*vec_ptr).new_cell_value(i,j,count);
+                    }
+                }
+            })
+        }
+
+        // Checking that values were not moved
+        for (start_y, end_y) in region_pool.work_region_list.iter(){
+            let x = start_y +1 ;
+        }
+        
+        // 3. join to wait
+        region_pool.join();
+
         new_results
     }
 }
 
-impl MatrixView for BMatrix{
+impl MatrixView for BMatrixVector{
     type Item = bool;
     fn at(&self, i:i32, j:i32) -> GameResult<Self::Item>{
         if i < 0 || j < 0 {
@@ -143,7 +177,7 @@ mod tests {
     use crate::tests::*;
     use super::*;
     #[test]
-    fn test_BMatrix_index_on_subview(){
+    fn test_BMatrixVector_index_on_subview(){
         let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
             conf::WindowMode::default()
                 .resizable(true)
@@ -162,7 +196,7 @@ mod tests {
 
     #[should_panic]
     #[test]
-    fn test_BMatrix_at_outOfBounds(){
+    fn test_BMatrixVector_at_outOfBounds(){
         println!("HI!!!!!!");
         let globals = setup().unwrap();
 
@@ -171,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_update_bmatrix_single_cell_become_dead(){
-        let mut b_matrix = BMatrix::new();
+        let mut b_matrix = BMatrixVector::new();
         let i = GRID_SIZE-1;
         let j = 40;
         let i = i as i32;
@@ -186,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_update_bmatrix_single_cell_become_alive(){
-        let mut b_matrix = BMatrix::new();
+        let mut b_matrix = BMatrixVector::new();
         let i = 40;
         let j = 40;
         *b_matrix.at_mut(i+1,j).unwrap() = true;
@@ -203,7 +237,7 @@ mod tests {
 
     #[test]
     fn test_update_bmatrix_edge_cell_become_alive(){
-        let mut b_matrix = BMatrix::new();
+        let mut b_matrix = BMatrixVector::new();
         let i = GRID_SIZE-1;
         let j = 40;
         let i = i as i32;
@@ -222,7 +256,7 @@ mod tests {
 
     #[test]
     fn test_update_bmatrix_corner_cell_stays_alive(){
-        let mut b_matrix = BMatrix::new();
+        let mut b_matrix = BMatrixVector::new();
         let i = GRID_SIZE-1;
         let j = GRID_SIZE-1;
         let i = i as i32;

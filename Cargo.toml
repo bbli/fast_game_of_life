@@ -46,6 +46,8 @@ rand="*"
 assert_approx_eq="*"
 mocktopus="*"
 rayon="*"
+threadpool="*"
+#scoped_threadpool="*"
 
 #[target.x86_64-unknown-linux-gnu]
 #rustflags = [
