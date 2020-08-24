@@ -133,15 +133,15 @@ impl Default for RegionPool{
     }
 }
 
-fn get_num_elems_each_time(worker_count: i32)->i32{
-    let num_rows_to_take = GRID_SIZE/worker_count;
-    let num_elems = num_rows_to_take*GRID_SIZE;
-    num_elems
+fn get_num_elems_each_time(vector: &BMatrixVector,worker_count: i32)->i32{
+    vector.len() as i32/worker_count
 }
 
 impl RegionPool{
+    // EC: worker_count is 1 -> max_offset should be 0, so edge case is fine too
     fn create_iter_mut<'a>(&mut self, vector: &'a mut BMatrixVector)->RegionPoolIterMut<'a>{
-        let num_elems_each_time = get_num_elems_each_time(self.worker_count);
+        let num_elems_each_time = get_num_elems_each_time(vector,self.worker_count);
+
         let max_offset = num_elems_each_time*(self.worker_count-1);
         RegionPoolIterMut{
             ptr: &mut vector[..],
@@ -168,17 +168,18 @@ impl<'a> Iterator for RegionPoolIterMut<'a>{
         let old_offset = self.offset;
         self.offset += self.num_elems_each_time;
         // after last case
-        if old_offset >= self.max_offset{
+        if old_offset > self.max_offset{
             None
         }
         //// just return ptr
         else if old_offset == self.max_offset{
             // Since this works, self.ptr must have 'a lifetime
             // even though self has local
-            let l = self.ptr;
-            self.ptr = &mut [];
-            //let slice = mem::replace(&mut self.ptr, &mut []);
-            //let l = slice;
+            //let l = self.ptr;
+            //self.ptr = &mut [];
+            // But that said, we can't explicitly take, since self.ptr doesn't own its values
+            let slice = mem::replace(&mut self.ptr, &mut []);
+            let l = slice;
 
 
             Some((l,old_offset))
@@ -188,8 +189,8 @@ impl<'a> Iterator for RegionPoolIterMut<'a>{
             //let (l,r) = self.ptr.split_at_mut(self.num_elems_each_time as usize);
 
             // Rustonomicon uses mem::replace to resolve(slice doesn't do anything in Drop though?) -> though the below works too
-            let slice = self.ptr;
-            //let slice = mem::replace(&mut self.ptr, &mut []);
+            //let slice = self.ptr;
+            let slice = mem::replace(&mut self.ptr, &mut []);
 
 
             let (l,r) = slice.split_at_mut(self.num_elems_each_time as usize);
