@@ -14,6 +14,7 @@ struct SpriteBatchHandler{
     // so we can't dynamically construct the SpriteIdx ourselves when
     // we want to use the spritebatch.set method
     handle_list: Vec<spritebatch::SpriteIdx>,
+    
     sw_horizontal_sections: i32,
     sw_vertical_sections: i32,
 }
@@ -24,11 +25,9 @@ pub struct FSubview{
     white_sb_handler: SpriteBatchHandler,
     // Note: relative_offset should be positive -> draw will take care of negative
     relative_offset: Point,
+
     sw_horizontal_sections: i32,
     sw_vertical_sections: i32,
-
-    mesh_builder: graphics::MeshBuilder,
-    mesh: graphics::Mesh
 }
 
  //Sliding Window Setup
@@ -45,18 +44,7 @@ impl FSubview{
     pub fn new(ctx: &mut Context)-> GameResult<FSubview>{
         let sw_horizontal_sections = get_1d_section(WINDOW_WIDTH);
         let sw_vertical_sections = get_1d_section(WINDOW_HEIGHT);
-        // ************  MESH BUILDER METHOD  ************   
-        let mut f_mesh = graphics::MeshBuilder::new();
 
-        for j in 0..sw_vertical_sections {
-            for i in 0..sw_horizontal_sections {
-                f_mesh.rectangle(DrawMode::fill(), new_rect(i, j), BLACK!());
-            }
-        }
-        let f_mesh = f_mesh.build(ctx)?;
-
-        // ************  SPRITE METHOD  ************   
-        //let image = Image::from_rgba8(ctx, CELL_SIZE as u16, CELL_SIZE as u16,&BLACK());
         // create both handles with invalid locations for all sprites
         let white_image = Image::solid(ctx,CELL_SIZE as u16,WHITE!()).unwrap();
         let white_sb_handler = fsubview::SpriteBatchHandler::new(white_image,sw_horizontal_sections,sw_vertical_sections);
@@ -71,9 +59,6 @@ impl FSubview{
             relative_offset: Point{x:0.0, y:0.0},
             sw_horizontal_sections,
             sw_vertical_sections,
-
-            mesh: f_mesh,
-            mesh_builder: graphics::MeshBuilder::new()
         })
     }
     pub fn startView(&mut self){

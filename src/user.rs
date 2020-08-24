@@ -44,9 +44,23 @@ impl OffsetState {
             &BottomLeftCorner(ref point) => point.clone(),
         }
     }
+    pub fn update(&mut self,ctx: &mut Context){
+        if keyboard::is_key_pressed(ctx,KeyCode::Right){
+            *self = transition_offset_state_right(*self);
+        }
+        if keyboard::is_key_pressed(ctx,KeyCode::Left){
+            *self = transition_offset_state_left(*self);
+        }
+        if keyboard::is_key_pressed(ctx,KeyCode::Up){
+            *self = transition_offset_state_up(*self);
+        }
+        if keyboard::is_key_pressed(ctx,KeyCode::Down){
+            *self = transition_offset_state_down(*self);
+        }
+    }
 }
 
-pub fn transition_offset_state_right(state: OffsetState) -> OffsetState {
+fn transition_offset_state_right(state: OffsetState) -> OffsetState {
     use OffsetState::*;
     match state {
         Inside(point) => {
@@ -101,7 +115,7 @@ pub fn transition_offset_state_right(state: OffsetState) -> OffsetState {
         }
     }
 }
-pub fn transition_offset_state_left(state: OffsetState) -> OffsetState {
+fn transition_offset_state_left(state: OffsetState) -> OffsetState {
     use OffsetState::*;
     match state {
         Inside(point) => {
@@ -156,8 +170,7 @@ pub fn transition_offset_state_left(state: OffsetState) -> OffsetState {
         BottomLeftCorner(point) => BottomLeftCorner(point),
     }
 }
-
-pub fn transition_offset_state_up(state: OffsetState) -> OffsetState {
+fn transition_offset_state_up(state: OffsetState) -> OffsetState {
     use OffsetState::*;
     match state {
         Inside(point) => {
@@ -216,7 +229,7 @@ pub fn transition_offset_state_up(state: OffsetState) -> OffsetState {
         }
     }
 }
-pub fn transition_offset_state_down(state: OffsetState) -> OffsetState {
+fn transition_offset_state_down(state: OffsetState) -> OffsetState {
     use OffsetState::*;
     match state {
         Inside(point) => {

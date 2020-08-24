@@ -17,6 +17,7 @@ use ggez::{Context, GameResult};
 use std::time::{SystemTime,UNIX_EPOCH};
 use std::ops::{Deref,DerefMut};
 use std::mem;
+use std::cmp::Ordering;
 //use threadpool::ThreadPool;
 use scoped_threadpool::Pool;
 
@@ -166,38 +167,40 @@ impl<'a> Iterator for RegionPoolIterMut<'a>{
         // old offset "points" to offset we are about to return
         let old_offset = self.offset;
         self.offset += self.num_elems_each_time;
-        // after last case
-        if old_offset > self.max_offset{
-            None
+
+        match old_offset.cmp(&self.max_offset){
+            // after last case
+            Ordering::Greater => None,
+            // last case -> just return ptr
+            Ordering::Equal => {
+                // Since this works, self.ptr must have 'a lifetime
+                // even though self has local
+                //let l = self.ptr;
+                //self.ptr = &mut [];
+                // But that said, we can't explicitly take, since self.ptr doesn't own its values
+                let slice = mem::replace(&mut self.ptr, &mut []);
+                let l = slice;
+
+
+                Some((l,old_offset))
+            }
+            // Recursive case
+            Ordering::Less => {
+                // self.ptr.split_at_mut will pass in the local lifetime rather than  'a
+                //let (l,r) = self.ptr.split_at_mut(self.num_elems_each_time as usize);
+
+                // Rustonomicon uses mem::replace to resolve(slice doesn't do anything in Drop though?) -> though the below works too
+                //let slice = self.ptr;
+                let slice = mem::replace(&mut self.ptr, &mut []);
+
+
+                let (l,r) = slice.split_at_mut(self.num_elems_each_time as usize);
+                self.ptr = r;
+
+
+                Some((l,old_offset))
+            }
         }
-        //// just return ptr
-        else if old_offset == self.max_offset{
-            // Since this works, self.ptr must have 'a lifetime
-            // even though self has local
-            //let l = self.ptr;
-            //self.ptr = &mut [];
-            // But that said, we can't explicitly take, since self.ptr doesn't own its values
-            let slice = mem::replace(&mut self.ptr, &mut []);
-            let l = slice;
-
-
-            Some((l,old_offset))
-        }
-        else{
-            // self.ptr.split_at_mut will pass in the local lifetime rather than  'a
-            //let (l,r) = self.ptr.split_at_mut(self.num_elems_each_time as usize);
-
-            // Rustonomicon uses mem::replace to resolve(slice doesn't do anything in Drop though?) -> though the below works too
-            //let slice = self.ptr;
-            let slice = mem::replace(&mut self.ptr, &mut []);
-
-
-            let (l,r) = slice.split_at_mut(self.num_elems_each_time as usize);
-            self.ptr = r;
-            Some((l,old_offset))
-        }
-
-
     }
 }
 
@@ -369,21 +372,6 @@ impl Grid {
         //self.f_subview.update_relative_offset(rel_offset_x,rel_offset_y);
         //Ok(())
     //}
-
-    fn update_offset(&mut self, ctx: &mut Context){
-        if keyboard::is_key_pressed(ctx,KeyCode::Right){
-            self.f_user_offset = user::transition_offset_state_right(self.f_user_offset);
-        }
-        if keyboard::is_key_pressed(ctx,KeyCode::Left){
-            self.f_user_offset = user::transition_offset_state_left(self.f_user_offset);
-        }
-        if keyboard::is_key_pressed(ctx,KeyCode::Up){
-            self.f_user_offset = user::transition_offset_state_up(self.f_user_offset);
-        }
-        if keyboard::is_key_pressed(ctx,KeyCode::Down){
-            self.f_user_offset = user::transition_offset_state_down(self.f_user_offset);
-        }
-    }
 }
 
 
@@ -398,13 +386,12 @@ trait MatrixView{
 impl event::EventHandler for Grid {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         self.sys_time = Some(SystemTime::now());
-        //let ten_seconds = time::Duration::from_secs(10);
-        //thread::sleep(ten_seconds);
 
         self.updateBackend();
 
-        self.update_offset(ctx);
-        // use update b_matrix to update view
+        //self.update_offset(ctx);
+        self.f_user_offset.update(ctx);
+        // use updated b_matrix to update view
         self.update_view(ctx)?;
         Ok(())
     }
