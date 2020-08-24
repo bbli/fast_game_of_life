@@ -250,6 +250,7 @@ struct BMatrix{
 }
 
 
+// For array indexing
 impl Deref for BMatrix{
     type Target = BMatrixVector;
     fn deref(&self) -> &Self::Target{
@@ -276,6 +277,18 @@ impl BMatrix{
             vec,
             update_method,
             region_pool
+        }
+    }
+    fn updateBackend(&mut self){
+        use BackendEngine::*;
+        match &self.update_method{
+            Single => {self.vec = self.vec.next_b_matrix();}
+            Rayon => {self.vec = self.next_b_matrix_rayon();}
+            MultiThreaded(worker_count) => {
+                let region_pool = &mut self.region_pool;
+                self.vec = self.next_b_matrix_threadpool(region_pool);
+            }
+            Skip => return
         }
     }
 }
@@ -317,14 +330,6 @@ impl Grid {
         self
     }
 
-    fn updateBackend(&mut self){
-        // 1. Single Threaded
-        //self.b_matrix = self.b_matrix.next_b_matrix();
-        // 2. Multi-Threaded with Rayon
-        //self.b_matrix = self.b_matrix.next_b_matrix_rayon();
-        // 3. Multi-Threaded with ThreadPool
-        self.b_matrix = self.b_matrix.next_b_matrix_threadpool(&mut self.region_pool);
-    }
 
     // Invariant Sliding Window Version
     fn update_view(&mut self, ctx: &mut Context) -> GameResult{
@@ -414,7 +419,7 @@ impl event::EventHandler for Grid {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         self.sys_time = Some(SystemTime::now());
 
-        self.updateBackend();
+        self.b_matrix.updateBackend();
 
         //self.update_offset(ctx);
         self.f_user_offset.update(ctx);
@@ -477,9 +482,8 @@ mod tests {
     pub struct Globals{
         pub ctx: Context,
         pub event_loop: EventsLoop,
-        pub grid: Grid
     }
-    pub fn setup(update_method: BackendEngine) -> GameResult<Globals>{
+    pub fn setup() -> GameResult<Globals>{
         let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
             conf::WindowMode::default()
                 .resizable(true)
@@ -487,9 +491,8 @@ mod tests {
         );
         let (mut ctx ,mut event_loop) = cb.build()?;
         // initialize a Grid object
-        let grid = Grid::new(&mut ctx,update_method)?;
         graphics::set_blend_mode(&mut ctx,BlendMode::Replace);
-        Ok(Globals{ctx,event_loop,grid})
+        Ok(Globals{ctx,event_loop})
     }
     // ************  ACTUAL TESTING  ************   
     //#[test]
@@ -524,9 +527,12 @@ mod tests {
         }
 
         // NOTE: turn off next_b_matrix() before executing this
-        let ref mut globals = setup(BackendEngine::Skip).unwrap();
-        globals.grid.init_seed(init_b_matrix_vector);
-        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+        let ref mut globals = setup().unwrap();
+
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap()
+            .init_seed(init_b_matrix_vector);
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);
     }
 
     #[test]
@@ -546,10 +552,13 @@ mod tests {
             }
         }
 
-        let mut globals = setup(BackendEngine::Skip).unwrap();
-        globals.grid = globals.grid.init_offset(user::get_max_offset_x(),0.0);
-        globals.grid.init_seed(init_b_matrix_vector);
-        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+        let mut globals = setup().unwrap();
+
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap()
+            .init_offset(user::get_max_offset_x(),0.0)
+            .init_seed(init_b_matrix_vector);
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);
     }
 
     #[test]

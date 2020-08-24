@@ -85,7 +85,7 @@ impl BMatrixVector{
         right + down + left + up
     }
 
-    pub fn new_cell_value(&self, state:bool, count:u32)-> bool{
+    fn new_cell_value(&self, state:bool, count:u32)-> bool{
         match state{
             //dead transition
             false => {if count== 3 {true} else {false}}
@@ -108,6 +108,7 @@ impl BMatrixVector{
 
         new_results
     }
+    // self has to be immutable for multi-thread reads
     pub fn next_b_matrix_rayon(&self) -> BMatrixVector{
         let mut new_results = BMatrixVector::default();
 
@@ -193,7 +194,7 @@ mod tests {
         );
         let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
         // initialize a Grid object
-        let update_method = BackendEngine::Skip
+        let update_method = BackendEngine::Skip;
         let grid = Grid::new(ctx,update_method).unwrap();
         // Check that a point close to origin
         let value = grid.b_matrix.at(1,1).unwrap();

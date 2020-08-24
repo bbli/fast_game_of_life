@@ -419,7 +419,7 @@ mod tests {
             })
         });
 
-        let mut globals = setup(BackendEngine::Skip).unwrap();
+        let mut globals = setup().unwrap();
         let black_image = Image::solid(&mut globals.ctx,CELL_SIZE as u16,BLACK!()).unwrap();
         let dummy = 125;
         let sprite_handler = SpriteBatchHandler::new(black_image,dummy,dummy);
@@ -436,9 +436,11 @@ mod tests {
             MockResult::Return(Ok(()))
         });
 
-        let mut globals = setup(BackendEngine::Skip).unwrap();
+        let mut globals = setup().unwrap();
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
         // 2. then change back to white
-        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);
     }
     #[test]
     #[ignore]
@@ -450,30 +452,36 @@ mod tests {
             MockResult::Return(Ok(()))
         });
 
-        let mut globals = setup(BackendEngine::Skip).unwrap();
+        let mut globals = setup().unwrap();
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
         // 2. then change back to white
-        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);
     }
 
     #[should_panic]
     #[test]
     fn test_SpriteBatchHandler_at_outOfBounds(){
-        let globals = setup(BackendEngine::Skip).unwrap();
+        let mut globals = setup().unwrap();
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
         // This test is contigent on Grid::new initalizing 
         // columns first
-        let sw_horizontal_sections = globals.grid.f_subview.sw_horizontal_sections;
-        globals.grid.f_subview.white_sb_handler.at(sw_horizontal_sections,1).unwrap();
+        let sw_horizontal_sections = grid.f_subview.sw_horizontal_sections;
+        grid.f_subview.white_sb_handler.at(sw_horizontal_sections,1).unwrap();
     }
     #[test]
     fn test_SpriteBatchHandler_at_rightAtEdge(){
-        let globals = setup(BackendEngine::Skip).unwrap();
+        let globals = setup().unwrap();
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
         // This test is contigent on Grid::new initalizing 
         // columns first
-        let sw_horizontal_sections = globals.grid.f_subview.sw_horizontal_sections;
-        let sw_vertical_sections = globals.grid.f_subview.sw_vertical_sections;
-        globals.grid.f_subview.white_sb_handler.at(sw_horizontal_sections-1,sw_vertical_sections-1).unwrap();
+        let sw_horizontal_sections = grid.f_subview.sw_horizontal_sections;
+        let sw_vertical_sections = grid.f_subview.sw_vertical_sections;
+        grid.f_subview.white_sb_handler.at(sw_horizontal_sections-1,sw_vertical_sections-1).unwrap();
     }
 
     // NOTE: not the best way to test as I am replacing the entire functions just for the sake of
@@ -481,36 +489,44 @@ mod tests {
     // static/mutable 3)or pass global variable in as a function argument
     #[test]
     fn test_get_horizontal_window_range_small_window(){
-        let globals = setup(BackendEngine::Skip).unwrap();
+        let globals = setup().unwrap();
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
-        let (left_idx,right_idx) = globals.grid.f_subview.get_horizontal_window_range(0.0, WINDOW_WIDTH as f32/2.0);
+        let (left_idx,right_idx) = grid.f_subview.get_horizontal_window_range(0.0, WINDOW_WIDTH as f32/2.0);
         assert_eq!(left_idx,0);
-        assert_eq!(right_idx,globals.grid.f_subview.sw_horizontal_sections-1);
+        assert_eq!(right_idx,grid.f_subview.sw_horizontal_sections-1);
     }
 
     #[test]
     fn test_get_horizontal_window_range_large_window(){
-        let globals = setup(BackendEngine::Skip).unwrap();
+        let globals = setup().unwrap();
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
         let right_edge_of_view = (GRID_SIZE-1) as f32 * (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
-        let (left_idx,right_idx) = globals.grid.f_subview.get_horizontal_window_range(0.0, right_edge_of_view);
+        let (left_idx,right_idx) = grid.f_subview.get_horizontal_window_range(0.0, right_edge_of_view);
         assert_eq!(right_idx,GRID_SIZE-1);
     }
     #[test]
     fn test_get_vertical_window_range_small_window(){
-        let globals = setup(BackendEngine::Skip).unwrap();
+        let globals = setup().unwrap();
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
-        let (left_idx,right_idx) = globals.grid.f_subview.get_vertical_window_range(0.0, WINDOW_HEIGHT as f32/2.0);
+        let (left_idx,right_idx) = grid.f_subview.get_vertical_window_range(0.0, WINDOW_HEIGHT as f32/2.0);
         assert_eq!(left_idx,0);
-        assert_eq!(right_idx,globals.grid.f_subview.sw_vertical_sections-1);
+        assert_eq!(right_idx,grid.f_subview.sw_vertical_sections-1);
     }
 
     #[test]
     fn test_get_vertical_window_range_large_window(){
-        let globals = setup(BackendEngine::Skip).unwrap();
+        let globals = setup().unwrap();
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
         let bottom_edge_of_view = (GRID_SIZE-1) as f32 * (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
-        let (top_idx,bottom_idx) = globals.grid.f_subview.get_vertical_window_range(0.0, bottom_edge_of_view);
+        let (top_idx,bottom_idx) = grid.f_subview.get_vertical_window_range(0.0, bottom_edge_of_view);
         assert_eq!(bottom_idx,GRID_SIZE-1);
     }
 }
