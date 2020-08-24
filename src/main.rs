@@ -16,7 +16,7 @@ use ggez::{Context, GameResult};
 //use std::{thread,time};
 use std::time::{SystemTime,UNIX_EPOCH};
 use std::ops::{Deref,DerefMut};
-//use std::mem;
+use std::mem;
 //use threadpool::ThreadPool;
 use scoped_threadpool::Pool;
 
@@ -121,9 +121,8 @@ pub struct RegionPool{
     threadpool: Pool,
     worker_count: i32
 }
-impl Default for RegionPool{
-    fn default()-> Self{
-        let worker_count:i32 = 8;
+impl RegionPool{
+    fn new(worker_count: i32)-> Self{
         //let threadpool = Arc::new(ThreadPool::new(worker_count as usize));
         let threadpool = Pool::new(worker_count as u32);
         RegionPool{
@@ -261,11 +260,11 @@ impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
     fn new(ctx: &mut Context) -> GameResult<Grid> {
         
-        let b_matrix = BMatrixVector::new();
+        let b_matrix = BMatrixVector::default();
         let sys_time = None;
         let f_subview = FSubview::new(ctx)?;
         let f_user_offset = OffsetState::default();
-        let region_pool = RegionPool::default();
+        let region_pool = RegionPool::new(1);
     
         Ok(Grid{
             b_matrix, 
@@ -430,7 +429,7 @@ pub fn main() -> GameResult {
     //println!("NUM_BLOCKS_HEIGHT2: {}",NUM_BLOCKS_HEIGHT2);
 
     // ************  GRID  ************   
-    let mut init_bmatrix = BMatrixVector::new();
+    let mut init_bmatrix = BMatrixVector::default();
     setup::make_random(&mut init_bmatrix);
     // ************  GGEZ  ************   
     let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
@@ -455,6 +454,7 @@ mod tests {
     pub use ggez::event::EventsLoop;
     pub use super::*;
     pub use assert_approx_eq::assert_approx_eq;
+    pub use mocktopus::mocking::*;
 
     pub struct Globals{
         pub ctx: Context,
@@ -494,7 +494,7 @@ mod tests {
     #[ignore]
     fn test_update_view_before_offset(){
         // NOTE: turn off next_bmatrix() before executing this
-        let mut init_bmatrix = BMatrixVector::new();
+        let mut init_bmatrix = BMatrixVector::default();
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{
                 //make_blinker(i,j,&mut init_bmatrix);
@@ -515,7 +515,7 @@ mod tests {
     fn test_update_view_after_offset(){
         // NOTE: turn off next_bmatrix() before executing this
         println!("GRID_SIZE: {}",GRID_SIZE);
-        let mut init_bmatrix = BMatrixVector::new();
+        let mut init_bmatrix = BMatrixVector::default();
         // just make part of the screen white
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{
@@ -531,6 +531,69 @@ mod tests {
         globals.grid = globals.grid.init_offset(user::get_max_offset_x(),0.0);
         globals.grid.b_matrix = init_bmatrix;
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+    }
+
+    #[test]
+    fn test_RegionPoolIterMut_get_num_elems_each_time_workerCount1(){
+        let worker_count = 1;
+        let vec = BMatrixVector::default();
+        let num_elems = get_num_elems_each_time(&vec,worker_count);
+        assert_eq!(num_elems,GRID_SIZE*GRID_SIZE);
+    }
+
+    #[test]
+    fn test_RegionPoolIterMut_next_edge_case(){
+        let worker_count = 1;
+        let mut region_pool = RegionPool::new(worker_count);
+        let bool_vec = vec![true,true,true,false,false,false,false];
+
+        let test_vec = bool_vec.clone();
+        let mut b_matrix_vector = BMatrixVector::new(bool_vec);
+        let mut region_iterator = region_pool.create_iter_mut(&mut b_matrix_vector);
+
+        if let Some((whole_slice,offset)) = region_iterator.next(){
+            assert_eq!(whole_slice,test_vec);
+            assert_eq!(offset,0);
+        }
+        else{
+            panic!("iterator should still have elements");
+        }
+    }
+
+    #[test]
+    fn test_RegionPoolIterMut_step_through_next(){
+        let worker_count = 3;
+        let mut region_pool = RegionPool::new(worker_count);
+        let mut vec = BMatrixVector::new(vec![true,true,true,false,false,false,false]);
+        let mut region_iterator = region_pool.create_iter_mut(&mut vec);
+        
+        if let Some((slice1,offset1)) = region_iterator.next(){
+            assert_eq!(slice1,vec![true,true]);
+            assert_eq!(offset1,0);
+        }
+        else{
+            panic!("iterator should still have elements");
+        }
+
+        if let Some((slice2,offset2)) = region_iterator.next(){
+            assert_eq!(slice2,vec![true,false]);
+            assert_eq!(offset2,2);
+        }
+        else{
+            panic!("iterator should still have elements");
+        }
+
+        if let Some((slice3,offset3)) = region_iterator.next(){
+            assert_eq!(slice3,vec![false,false,false]);
+            assert_eq!(offset3,4);
+        }
+        else{
+            panic!("iterator should still have elements");
+        }
+
+        if let Some(_) = region_iterator.next(){
+            panic!("iterator should be empty now");
+        }
     }
 
 

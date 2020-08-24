@@ -2,6 +2,11 @@ use std::ops::{Deref,DerefMut};
 use rayon::prelude::*;
 use super::*;
 
+#[cfg(test)]
+use mocktopus::macros::*;
+
+
+
 // has to be on heap otherwise stack overflow
 pub struct BMatrixVector(Vec<bool>);
 //unsafe impl Send for *const BMatrixVector{}
@@ -19,8 +24,8 @@ impl DerefMut for BMatrixVector{
     }
 }
 
-impl BMatrixVector{
-    pub fn new()-> Self{
+impl Default for BMatrixVector{
+    fn default()-> Self{
         BMatrixVector(vec![false;(GRID_SIZE*GRID_SIZE) as usize])
     }
 }
@@ -56,7 +61,13 @@ fn par_new_cell_value(i:i32,j:i32,count:u32,b_matrix:&BMatrixVector) -> bool{
         true => {if count == 2 || count == 3 {true} else {false}}
     }
 }
+
+
+#[mockable]
 impl BMatrixVector{
+    pub fn new(vec: Vec<bool>)->Self{
+        BMatrixVector(vec)
+    }
     fn convert_bool(&self,x:i32,y:i32)-> u32{
         match self.at(x,y){
             Ok(value) => if value {1}else {0},
@@ -84,7 +95,7 @@ impl BMatrixVector{
     }
 
     pub fn next_bmatrix(&self)-> BMatrixVector{
-        let mut new_results = BMatrixVector::new();
+        let mut new_results = BMatrixVector::default();
 
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{
@@ -98,7 +109,7 @@ impl BMatrixVector{
         new_results
     }
     pub fn next_bmatrix_rayon(&self) -> BMatrixVector{
-        let mut new_results = BMatrixVector::new();
+        let mut new_results = BMatrixVector::default();
 
         new_results.par_iter_mut().enumerate().for_each(|(idx,cell_ptr)| {
             let (i,j) = get_location_from_idx(idx);
@@ -112,15 +123,19 @@ impl BMatrixVector{
 //fn do_job(start_y:i32, end_y: i32, )
     pub fn next_bmatrix_threadpool(&self, region_pool: &mut RegionPool)-> BMatrixVector{
         // ************  MULTITHREADED THREADPOOL  ************   
-        let mut new_results = BMatrixVector::new();
+        let mut new_results = BMatrixVector::default();
         // 0. allocate threadpool during Grid::new() DONE
         // 1. code to partition grid evenly into num_of_threads(also in setup) DONE
         // 2. start up each thread -> since they have a predefined job
+        // 3. join to wait
+        //
+        // need local variable since closures require unique acess to its borrows
+        let region_iterator = region_pool.create_iter_mut(&mut new_results);
         region_pool.scoped(|scope|{
-            for (slice,iter_offset) in region_pool.create_iter_mut(&mut new_results){
+            for (slice,iter_offset) in region_iterator{
                 scope.execute(move ||{
-                    for (rel_i,cell_ptr) in slice.enumerate(){
-                        let idx = rel_i + iter_offset;
+                    for (rel_i,cell_ptr) in slice.iter_mut().enumerate(){
+                        let idx = rel_i + iter_offset as usize;
                         let (i,j) = get_location_from_idx(idx);
                         let count = self.get_count(i,j);
                         let state = self.at(i,j).unwrap();
@@ -132,8 +147,6 @@ impl BMatrixVector{
         });
 
         
-        // 3. join to wait
-        //pool.join_all();
         new_results
     }
 }
@@ -200,7 +213,7 @@ mod tests {
 
     #[test]
     fn test_update_bmatrix_single_cell_become_dead(){
-        let mut b_matrix = BMatrixVector::new();
+        let mut b_matrix = BMatrixVector::default();
         let i = GRID_SIZE-1;
         let j = 40;
         let i = i as i32;
@@ -215,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_update_bmatrix_single_cell_become_alive(){
-        let mut b_matrix = BMatrixVector::new();
+        let mut b_matrix = BMatrixVector::default();
         let i = 40;
         let j = 40;
         *b_matrix.at_mut(i+1,j).unwrap() = true;
@@ -232,7 +245,7 @@ mod tests {
 
     #[test]
     fn test_update_bmatrix_edge_cell_become_alive(){
-        let mut b_matrix = BMatrixVector::new();
+        let mut b_matrix = BMatrixVector::default();
         let i = GRID_SIZE-1;
         let j = 40;
         let i = i as i32;
@@ -251,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_update_bmatrix_corner_cell_stays_alive(){
-        let mut b_matrix = BMatrixVector::new();
+        let mut b_matrix = BMatrixVector::default();
         let i = GRID_SIZE-1;
         let j = GRID_SIZE-1;
         let i = i as i32;
@@ -276,5 +289,40 @@ mod tests {
         let (new_i,new_j) = get_location_from_idx(idx as usize);
         assert_eq!(i,new_i);
         assert_eq!(j,new_j);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_next_bmatrix_threadpool_first_thread(){
+        // NOTE: B/c of closures, hard to abstract over so we will just plain out
+        // override the method we are testing -> So if implementation changes,
+        // make sure to change this too
+        BMatrixVector::next_bmatrix_threadpool.mock_safe(|my_self:&BMatrixVector,region_pool:&mut RegionPool|{
+            let mut new_results = BMatrixVector::default();
+            // unlike in for loop, we are not going to move region_iterator
+            let mut region_iterator = region_pool.create_iter_mut(&mut new_results);
+            region_pool.scoped(|scope|{
+                if let Some((first_slice,first_offset)) = region_iterator.next(){
+                    scope.execute(move ||{
+                        for (rel_i,cell_ptr) in first_slice.iter_mut().enumerate(){
+                            let idx = rel_i + first_offset as usize;
+                            let (i,j) = get_location_from_idx(idx);
+                            let count = my_self.get_count(i,j);
+                            let state = my_self.at(i,j).unwrap();
+                            *cell_ptr = my_self.new_cell_value(state,count);
+                        }
+                    })
+                }
+                else{
+                    panic!("iterator should still have elements");
+                }
+            });
+
+            MockResult::Return(new_results)
+        });
+
+        let mut globals = setup().unwrap();
+        // should only update the first section of rows
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
 }
