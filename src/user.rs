@@ -294,8 +294,8 @@ mod tests {
     #[ignore]
     fn test_transition_bottom_right_corner(){
         // ************  GRID  ************   
-        let mut init_bmatrix = BMatrixVector::default();
-        patterns::make_random(&mut init_bmatrix);
+        let mut init_bmatrix_vector = BMatrixVector::default();
+        patterns::make_random(&mut init_bmatrix_vector);
         // ************  GGEZ  ************   
         let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
             conf::WindowMode::default()
@@ -308,7 +308,7 @@ mod tests {
         graphics::set_blend_mode(ctx,BlendMode::Replace);
         let update_method = BackendEngine::Rayon;
         let ref mut state = Grid::new(ctx,update_method).unwrap()
-            .init_seed(init_bmatrix)
+            .init_seed(init_bmatrix_vector)
             .init_offset(user::get_max_offset_x()-5.0,user::get_max_offset_y()-5.0);
         event::run(ctx, event_loop, state);
     }
@@ -317,8 +317,8 @@ mod tests {
     #[ignore]
     fn test_transition_top_left_corner(){
         // ************  GRID  ************   
-        let mut init_bmatrix = BMatrixVector::default();
-        patterns::make_random(&mut init_bmatrix);
+        let mut init_bmatrix_vector = BMatrixVector::default();
+        patterns::make_random(&mut init_bmatrix_vector);
         // ************  GGEZ  ************   
         let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
             conf::WindowMode::default()
@@ -331,7 +331,7 @@ mod tests {
         graphics::set_blend_mode(ctx,BlendMode::Replace);
         let update_method = BackendEngine::Rayon;
         let ref mut state = Grid::new(ctx,update_method).unwrap()
-            .init_seed(init_bmatrix)
+            .init_seed(init_bmatrix_vector)
             .init_offset(0.0,0.0);
         event::run(ctx, event_loop, state);
     }
