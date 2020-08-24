@@ -184,10 +184,10 @@ impl MatrixView for SpriteBatchHandler{
     type Item= spritebatch::SpriteIdx;
     fn at(&self,i:i32, j:i32)-> GameResult<Self::Item>{
         if i < 0 || j < 0 {
-            Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
+            Err(GameError::EventLoopError("IndexError(View Matrix.at): i and j must be nonnegative".to_string()))
         }
         else if i >= self.sw_horizontal_sections || j>= self.sw_vertical_sections {
-            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",self.sw_horizontal_sections,self.sw_vertical_sections)))
+            Err(GameError::EventLoopError(format!("IndexError: View Matrix's i must be less than {} and j must be less than {}",self.sw_horizontal_sections,self.sw_vertical_sections)))
         }
         else{
             Ok(self.handle_list[(j*self.sw_horizontal_sections+ i) as usize])
@@ -195,10 +195,10 @@ impl MatrixView for SpriteBatchHandler{
     }
     fn at_mut<'a>(&'a mut self,i:i32, j:i32)-> GameResult<&'a mut Self::Item>{
         if i < 0 || j < 0 {
-            Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
+            Err(GameError::EventLoopError("IndexError(View Matrix.at): i and j must be nonnegative".to_string()))
         }
         else if i >= self.sw_horizontal_sections || j>= self.sw_vertical_sections {
-            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",self.sw_horizontal_sections,self.sw_vertical_sections)))
+            Err(GameError::EventLoopError(format!("IndexError: View Matrix's i must be less than {} and j must be less than {}",self.sw_horizontal_sections,self.sw_vertical_sections)))
         }
         else{
             Ok(&mut self.handle_list[(j*self.sw_horizontal_sections + i) as usize])

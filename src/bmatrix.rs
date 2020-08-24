@@ -36,24 +36,24 @@ fn get_location_from_idx(idx:usize)->(i32,i32){
     let j = (idx - i) / GRID_SIZE;
     (i,j)
 }
-fn par_convert_bool(i:i32,j:i32,b_matrix:&BMatrixVector)-> u32{
-        match b_matrix.at(i,j){
+fn par_convert_bool(i:i32,j:i32,b_matrix_vector:&BMatrixVector)-> u32{
+        match b_matrix_vector.at(i,j){
             Ok(value) => if value {1}else {0},
             //EC: off screen
             Err(_) => 0
         }
 }
 
-fn par_get_count(i:i32,j:i32,b_matrix: &BMatrixVector)->u32{
-        let right = par_convert_bool(i+1,j,b_matrix);
-        let down = par_convert_bool(i,j+1,b_matrix);
-        let left = par_convert_bool(i-1,j,b_matrix);
-        let up = par_convert_bool(i,j-1,b_matrix);
+fn par_get_count(i:i32,j:i32,b_matrix_vector: &BMatrixVector)->u32{
+        let right = par_convert_bool(i+1,j,b_matrix_vector);
+        let down = par_convert_bool(i,j+1,b_matrix_vector);
+        let left = par_convert_bool(i-1,j,b_matrix_vector);
+        let up = par_convert_bool(i,j-1,b_matrix_vector);
         right + down + left + up
 }
 
-fn par_new_cell_value(i:i32,j:i32,count:u32,b_matrix:&BMatrixVector) -> bool{
-    let state = b_matrix.at(i,j).unwrap();
+fn par_new_cell_value(i:i32,j:i32,count:u32,b_matrix_vector:&BMatrixVector) -> bool{
+    let state = b_matrix_vector.at(i,j).unwrap();
     match state{
         //dead transition
         false => {if count== 3 {true} else {false}}
@@ -94,7 +94,7 @@ impl BMatrixVector{
         }
     }
 
-    pub fn next_bmatrix(&self)-> BMatrixVector{
+    pub fn next_b_matrix(&self)-> BMatrixVector{
         let mut new_results = BMatrixVector::default();
 
         for j in 0..GRID_SIZE{
@@ -108,7 +108,7 @@ impl BMatrixVector{
 
         new_results
     }
-    pub fn next_bmatrix_rayon(&self) -> BMatrixVector{
+    pub fn next_b_matrix_rayon(&self) -> BMatrixVector{
         let mut new_results = BMatrixVector::default();
 
         new_results.par_iter_mut().enumerate().for_each(|(idx,cell_ptr)| {
@@ -121,7 +121,7 @@ impl BMatrixVector{
     }
 
 //fn do_job(start_y:i32, end_y: i32, )
-    pub fn next_bmatrix_threadpool(&self, region_pool: &mut RegionPool)-> BMatrixVector{
+    pub fn next_b_matrix_threadpool(&self, region_pool: &mut RegionPool)-> BMatrixVector{
         // ************  MULTITHREADED THREADPOOL  ************   
         let mut new_results = BMatrixVector::default();
         // 0. allocate threadpool during Grid::new() DONE
@@ -155,11 +155,11 @@ impl MatrixView for BMatrixVector{
     type Item = bool;
     fn at(&self, i:i32, j:i32) -> GameResult<Self::Item>{
         if i < 0 || j < 0 {
-            Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
+            Err(GameError::EventLoopError("IndexError(b_matrix.at): i and j must be nonnegative".to_string()))
         }
         else if i >= GRID_SIZE || j>= GRID_SIZE {
         //if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
-            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
+            Err(GameError::EventLoopError(format!("IndexError: b_matrix_vector's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
         }
         else{
             //bool is copy type, so moving is fine
@@ -168,11 +168,11 @@ impl MatrixView for BMatrixVector{
     }
     fn at_mut<'a>(&'a mut self, i:i32, j:i32) -> GameResult<&'a mut Self::Item>{
         if i < 0 || j < 0 {
-            Err(GameError::EventLoopError("IndexError(bmatrix.at): i and j must be nonnegative".to_string()))
+            Err(GameError::EventLoopError("IndexError(b_matrix.at): i and j must be nonnegative".to_string()))
         }
         else if i >= GRID_SIZE || j>= GRID_SIZE {
         //if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
-            Err(GameError::EventLoopError(format!("IndexError: b_matrix's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
+            Err(GameError::EventLoopError(format!("IndexError: b_matrix_vector's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
         }
         else{
             Ok(&mut self.0[(j*GRID_SIZE +i) as usize])
@@ -213,73 +213,73 @@ mod tests {
     }
 
     #[test]
-    fn test_update_bmatrix_single_cell_become_dead(){
-        let mut b_matrix = BMatrixVector::default();
+    fn test_update_b_matrix_single_cell_become_dead(){
+        let mut b_matrix_vector = BMatrixVector::default();
         let i = GRID_SIZE-1;
         let j = 40;
         let i = i as i32;
         let j = j as i32;
 
-        *b_matrix.at_mut(i,j).unwrap() = true;
-        assert_eq!(b_matrix.at(i,j).unwrap(),true);
-        let new_matrix = b_matrix.next_bmatrix();
+        *b_matrix_vector.at_mut(i,j).unwrap() = true;
+        assert_eq!(b_matrix_vector.at(i,j).unwrap(),true);
+        let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
 
-        assert_eq!(new_matrix.at(i,j).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i,j).unwrap(),false);
     }
 
     #[test]
-    fn test_update_bmatrix_single_cell_become_alive(){
-        let mut b_matrix = BMatrixVector::default();
+    fn test_update_b_matrix_single_cell_become_alive(){
+        let mut b_matrix_vector = BMatrixVector::default();
         let i = 40;
         let j = 40;
-        *b_matrix.at_mut(i+1,j).unwrap() = true;
-        *b_matrix.at_mut(i,j+1).unwrap() = true;
-        *b_matrix.at_mut(i-1,j).unwrap() = true;
+        *b_matrix_vector.at_mut(i+1,j).unwrap() = true;
+        *b_matrix_vector.at_mut(i,j+1).unwrap() = true;
+        *b_matrix_vector.at_mut(i-1,j).unwrap() = true;
 
-        let next_bmatrix = b_matrix.next_bmatrix();
+        let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
 
-        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
-        assert_eq!(next_bmatrix.at(i+1,j).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i,j+1).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i,j).unwrap(),true);
+        assert_eq!(next_b_matrix_vector.at(i+1,j).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i,j+1).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i-1,j).unwrap(),false);
     }
 
     #[test]
-    fn test_update_bmatrix_edge_cell_become_alive(){
-        let mut b_matrix = BMatrixVector::default();
+    fn test_update_b_matrix_edge_cell_become_alive(){
+        let mut b_matrix_vector = BMatrixVector::default();
         let i = GRID_SIZE-1;
         let j = 40;
         let i = i as i32;
         let j = j as i32;
-        *b_matrix.at_mut(i,j+1).unwrap() = true;
-        *b_matrix.at_mut(i-1,j).unwrap() = true;
-        *b_matrix.at_mut(i,j-1).unwrap() = true;
+        *b_matrix_vector.at_mut(i,j+1).unwrap() = true;
+        *b_matrix_vector.at_mut(i-1,j).unwrap() = true;
+        *b_matrix_vector.at_mut(i,j-1).unwrap() = true;
 
-        let next_bmatrix = b_matrix.next_bmatrix();
+        let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
 
-        assert_eq!(next_bmatrix.at(i,j+1).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i,j-1).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
+        assert_eq!(next_b_matrix_vector.at(i,j+1).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i-1,j).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i,j-1).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i,j).unwrap(),true);
     }
 
     #[test]
-    fn test_update_bmatrix_corner_cell_stays_alive(){
-        let mut b_matrix = BMatrixVector::default();
+    fn test_update_b_matrix_corner_cell_stays_alive(){
+        let mut b_matrix_vector = BMatrixVector::default();
         let i = GRID_SIZE-1;
         let j = GRID_SIZE-1;
         let i = i as i32;
         let j = j as i32;
 
-        *b_matrix.at_mut(i,j-1).unwrap() = true;
-        *b_matrix.at_mut(i-1,j).unwrap() = true;
-        *b_matrix.at_mut(i,j).unwrap() = true;
+        *b_matrix_vector.at_mut(i,j-1).unwrap() = true;
+        *b_matrix_vector.at_mut(i-1,j).unwrap() = true;
+        *b_matrix_vector.at_mut(i,j).unwrap() = true;
 
-        let next_bmatrix = b_matrix.next_bmatrix();
+        let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
 
-        assert_eq!(next_bmatrix.at(i,j).unwrap(),true);
-        assert_eq!(next_bmatrix.at(i,j-1).unwrap(),false);
-        assert_eq!(next_bmatrix.at(i-1,j).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i,j).unwrap(),true);
+        assert_eq!(next_b_matrix_vector.at(i,j-1).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i-1,j).unwrap(),false);
     }
 
     #[test]
@@ -294,11 +294,11 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_next_bmatrix_threadpool_first_thread(){
+    fn test_next_b_matrix_threadpool_first_thread(){
         // NOTE: B/c of closures, hard to abstract over so we will just plain out
         // override the method we are testing -> So if implementation changes,
         // make sure to change this too
-        BMatrixVector::next_bmatrix_threadpool.mock_safe(|my_self:&BMatrixVector,region_pool:&mut RegionPool|{
+        BMatrixVector::next_b_matrix_threadpool.mock_safe(|my_self:&BMatrixVector,region_pool:&mut RegionPool|{
             let mut new_results = BMatrixVector::default();
             // unlike in for loop, we are not going to move region_iterator
             let mut region_iterator = region_pool.create_iter_mut(&mut new_results);

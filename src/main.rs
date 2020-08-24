@@ -306,8 +306,8 @@ impl Grid {
         )
     }
 
-    fn init_seed(mut self, init_bmatrix_vector: BMatrixVector) -> Self{
-        self.b_matrix.vec = init_bmatrix_vector;
+    fn init_seed(mut self, init_b_matrix_vector: BMatrixVector) -> Self{
+        self.b_matrix.vec = init_b_matrix_vector;
         self
     }
 
@@ -319,11 +319,11 @@ impl Grid {
 
     fn updateBackend(&mut self){
         // 1. Single Threaded
-        //self.b_matrix = self.b_matrix.next_bmatrix();
+        //self.b_matrix = self.b_matrix.next_b_matrix();
         // 2. Multi-Threaded with Rayon
-        //self.b_matrix = self.b_matrix.next_bmatrix_rayon();
+        //self.b_matrix = self.b_matrix.next_b_matrix_rayon();
         // 3. Multi-Threaded with ThreadPool
-        self.b_matrix = self.b_matrix.next_bmatrix_threadpool(&mut self.region_pool);
+        self.b_matrix = self.b_matrix.next_b_matrix_threadpool(&mut self.region_pool);
     }
 
     // Invariant Sliding Window Version
@@ -443,8 +443,8 @@ pub fn main() -> GameResult {
     //println!("NUM_BLOCKS_HEIGHT2: {}",NUM_BLOCKS_HEIGHT2);
 
     // ************  GRID  ************   
-    let mut init_bmatrix_vector = BMatrixVector::default();
-    patterns::make_random(&mut init_bmatrix_vector);
+    let mut init_b_matrix_vector = BMatrixVector::default();
+    patterns::make_random(&mut init_b_matrix_vector);
     // ************  GGEZ  ************   
     let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
         conf::WindowMode::default()
@@ -460,7 +460,7 @@ pub fn main() -> GameResult {
     let origin_point = 0.0 as f32;
     let update_method = BackendEngine::MultiThreaded(8);
     let ref mut state = Grid::new(ctx,update_method)?
-        .init_seed(init_bmatrix_vector)
+        .init_seed(init_b_matrix_vector)
         .init_offset(origin_point,origin_point);
     event::run(ctx, event_loop, state)
 }
@@ -512,43 +512,43 @@ mod tests {
     #[test]
     #[ignore]
     fn test_update_view_before_offset(){
-        let mut init_bmatrix_vector = BMatrixVector::default();
+        let mut init_b_matrix_vector = BMatrixVector::default();
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{
-                //make_blinker(i,j,&mut init_bmatrix_vector);
-                //make_square(i,j,&mut init_bmatrix_vector);
+                //make_blinker(i,j,&mut init_b_matrix_vector);
+                //make_square(i,j,&mut init_b_matrix_vector);
                 if i>GRID_SIZE/2{
-                    *init_bmatrix_vector.at_mut(i,j).unwrap() = true;
+                    *init_b_matrix_vector.at_mut(i,j).unwrap() = true;
                 }
             }
         }
 
-        // NOTE: turn off next_bmatrix() before executing this
+        // NOTE: turn off next_b_matrix() before executing this
         let ref mut globals = setup(BackendEngine::Skip).unwrap();
-        globals.grid.init_seed(init_bmatrix_vector);
+        globals.grid.init_seed(init_b_matrix_vector);
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
 
     #[test]
     #[ignore]
     fn test_update_view_after_offset(){
-        // NOTE: turn off next_bmatrix() before executing this
+        // NOTE: turn off next_b_matrix() before executing this
         println!("GRID_SIZE: {}",GRID_SIZE);
-        let mut init_bmatrix_vector = BMatrixVector::default();
+        let mut init_b_matrix_vector = BMatrixVector::default();
         // just make part of the screen white
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{
-                //make_blinker(i,j,&mut init_bmatrix_vector);
-                //make_square(i,j,&mut init_bmatrix_vector);
+                //make_blinker(i,j,&mut init_b_matrix_vector);
+                //make_square(i,j,&mut init_b_matrix_vector);
                 if i>GRID_SIZE/2{
-                    *init_bmatrix_vector.at_mut(i,j).unwrap() = true;
+                    *init_b_matrix_vector.at_mut(i,j).unwrap() = true;
                 }
             }
         }
 
         let mut globals = setup(BackendEngine::Skip).unwrap();
         globals.grid = globals.grid.init_offset(user::get_max_offset_x(),0.0);
-        globals.grid.init_seed(init_bmatrix_vector);
+        globals.grid.init_seed(init_b_matrix_vector);
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
 
