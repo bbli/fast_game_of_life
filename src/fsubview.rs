@@ -23,7 +23,7 @@ struct SpriteBatchHandler{
 pub struct FSubview{
     black_sb_handler: SpriteBatchHandler,
     white_sb_handler: SpriteBatchHandler,
-    // Note: relative_offset should be positive -> draw will take care of negative
+    // NOTE: relative_offset should be positive -> draw will take care of negative
     relative_offset: Point,
 
     sw_horizontal_sections: i32,
@@ -98,7 +98,6 @@ impl FSubview{
 
 //#[mockable]
 impl FSubview{
-    // NOTE: Is setting costly? If so, should only set if location actually changes
     fn change_to_black(&mut self,relative_i: i32, relative_j: i32){
         //set corresponding black sprite to correct location given i,j
         self.black_sb_handler.set_correct(relative_i,relative_j);
@@ -484,9 +483,6 @@ mod tests {
         grid.f_subview.white_sb_handler.at(sw_horizontal_sections-1,sw_vertical_sections-1).unwrap();
     }
 
-    // NOTE: not the best way to test as I am replacing the entire functions just for the sake of
-    // manipulating a global variable. But it's either this 2) or make the global variable
-    // static/mutable 3)or pass global variable in as a function argument
     #[test]
     fn test_get_horizontal_window_range_small_window(){
         let globals = setup().unwrap();

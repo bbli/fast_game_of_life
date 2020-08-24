@@ -248,7 +248,7 @@ impl BMatrix{
     fn new(update_method: BackendEngine)-> Self{
         use BackendEngine::*;
         let vec = BMatrixVector::default();
-        // Note: using update match ergonomics
+        // NOTE: using update match ergonomics
         let region_pool = match &update_method{
             Single | Rayon | Skip => RegionPool::new(1),
             MultiThreaded(x) => RegionPool::new(*x),
@@ -403,10 +403,17 @@ impl event::EventHandler for Grid {
 
 pub fn main() -> GameResult {
     // ************  GRID  ************   
-    let mut init_b_matrix_vector = BMatrixVector::default();
-    // Note: all patterns start drawing from the top leftmost corner of the
+    // NOTE: all patterns start drawing from the top leftmost corner of the
     // "smallest bounding rectangle" of the pattern
-    patterns::make_random(&mut init_b_matrix_vector);
+    let start_point = (0,500);
+    let mut init_b_matrix_vector = patterns::PatternBuilder::new()
+        .make_square(0,0)
+        .make_blinker(10,10)
+        .make_t(100,100)
+        .make_r_pentomino(400,400)
+        .make_glider(800,800)
+        .make_random(start_point,400,500)
+        .build();
     // ************  GGEZ  ************   
     let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
         conf::WindowMode::default()
@@ -474,6 +481,7 @@ mod tests {
 
     #[test]
     #[ignore]
+    // NOTE: turn off next_b_matrix() before executing this
     fn test_update_view_before_offset(){
         let mut init_b_matrix_vector = BMatrixVector::default();
         for j in 0..GRID_SIZE{
@@ -486,7 +494,6 @@ mod tests {
             }
         }
 
-        // NOTE: turn off next_b_matrix() before executing this
         let ref mut globals = setup().unwrap();
 
         let update_method = BackendEngine::Skip;
@@ -497,8 +504,8 @@ mod tests {
 
     #[test]
     #[ignore]
+    // NOTE: turn off next_b_matrix() before executing this
     fn test_update_view_after_offset(){
-        // NOTE: turn off next_b_matrix() before executing this
         println!("GRID_SIZE: {}",GRID_SIZE);
         let mut init_b_matrix_vector = BMatrixVector::default();
         // just make part of the screen white
