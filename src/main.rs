@@ -8,7 +8,7 @@ use ggez::event::KeyCode;
 use ggez::{conf,event,graphics};
 use ggez::input::keyboard;
 use ggez::error::GameError;
-use ggez::graphics::{DrawMode, Image, Rect,DrawParam,BlendMode};
+use ggez::graphics::{Image,DrawParam,BlendMode};
 use ggez::{Context, GameResult};
 
 //use std::{thread,time};
@@ -19,8 +19,8 @@ use std::cmp::Ordering;
 //use threadpool::ThreadPool;
 use scoped_threadpool::Pool;
 
-mod bmatrix;
-use bmatrix::*;
+mod bmatrix_vector;
+use bmatrix_vector::*;
 
 mod fsubview;
 use fsubview::FSubview;
@@ -250,7 +250,7 @@ struct BMatrix{
 }
 
 
-// For array indexing
+// For array indexing by fsubview
 impl Deref for BMatrix{
     type Target = BMatrixVector;
     fn deref(&self) -> &Self::Target{
@@ -284,11 +284,11 @@ impl BMatrix{
         match &self.update_method{
             Single => {self.vec = self.vec.next_b_matrix();}
             Rayon => {self.vec = self.next_b_matrix_rayon();}
-            MultiThreaded(worker_count) => {
+            MultiThreaded(_worker_count) => {
                 let region_pool = &mut self.region_pool;
                 self.vec = self.vec.next_b_matrix_threadpool(region_pool);
             }
-            Skip => return
+            Skip => {}
         }
     }
 }
@@ -459,7 +459,7 @@ pub fn main() -> GameResult {
 
     // ************  RUNNING  ************   
     let (ref mut ctx, ref mut event_loop) = cb.build()?;
-    graphics::set_blend_mode(ctx,BlendMode::Replace);
+    graphics::set_blend_mode(ctx,BlendMode::Replace)?;
 
     //let origin_point = (GRID_SIZE/2) as f32;
     let origin_point = 0.0 as f32;

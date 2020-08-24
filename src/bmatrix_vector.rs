@@ -30,6 +30,7 @@ impl Default for BMatrixVector{
     }
 }
 
+// ************  Helper Functions  ************   
 fn get_location_from_idx(idx:usize)->(i32,i32){
     let idx = idx as i32;
     let i = idx % GRID_SIZE;
@@ -323,8 +324,14 @@ mod tests {
             MockResult::Return(new_results)
         });
 
-        let mut globals = setup(BackendEngine::MultiThreaded(7)).unwrap();
+        let mut globals = setup().unwrap();
+        let init_b_matrix_vector = BMatrixVector::default();
+        //TODO: change pattern
+        let update_method = BackendEngine::MultiThreaded(7);
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap()
+            .init_seed(init_b_matrix_vector);
+
         // should only update the first section of rows
-        event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
+        event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);
     }
 }

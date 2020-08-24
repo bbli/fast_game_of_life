@@ -89,7 +89,7 @@ impl FSubview{
         let offset_draw_param = DrawParam::new()
                             .dest(Point2::new(-self.relative_offset.x,-self.relative_offset.y));
         match graphics::draw(ctx, &self.black_sb_handler.spritebatch ,offset_draw_param){
-            Ok(value) => graphics::draw(ctx, &self.white_sb_handler.spritebatch ,offset_draw_param),
+            Ok(_value) => graphics::draw(ctx, &self.white_sb_handler.spritebatch ,offset_draw_param),
             Err(x) => Err(x)
         }
         //graphics::draw(ctx,&self.mesh,offset_draw_param)
@@ -156,8 +156,8 @@ impl SpriteBatchHandler{
             handle_list.reserve((sw_horizontal_sections*sw_vertical_sections)as usize);
             //// Create x axis first since in graphics first index corresponds with 
             //// the column, not row
-            for j in 0..sw_vertical_sections {
-                for i in 0..sw_horizontal_sections{
+            for _j in 0..sw_vertical_sections {
+                for _i in 0..sw_horizontal_sections{
                     let sprite_idx = spritebatch.add(new_cell(INVALID_X,INVALID_Y));
                     handle_list.push(sprite_idx);
                     //handle_list.0.push(spritebatch.add(new_cell(i,j)));
