@@ -66,7 +66,7 @@ fn par_new_cell_value(i:i32,j:i32,count:u32,b_matrix_vector:&BMatrixVector) -> b
 
 //#[mockable]
 impl BMatrixVector{
-    pub fn new(vec: Vec<bool>)->Self{
+    pub fn new_for_test(vec: Vec<bool>)->Self{
         BMatrixVector(vec)
     }
     fn convert_bool(&self,x:i32,y:i32)-> u32{

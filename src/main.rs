@@ -100,21 +100,7 @@ macro_rules! GREY {
     };
 }
 
-// ************  MAIN CODE  ************   
-
-#[derive(Clone,Copy)]
-pub struct Point{
-    x: f32,
-    y: f32
-}
-impl Point{
-    pub fn new(x:f32,y:f32)->Point{
-        if x < 0.0 || y < 0.0{
-            panic!("Point needs to be positive in both dimensions");
-        }
-        Point{x,y}
-    }
-}
+// ************  Threading Code  ************   
 
 pub struct RegionPool{
     threadpool: Pool,
@@ -236,12 +222,6 @@ impl DerefMut for RegionPool{
     //work_region_list
 //}
 
-pub struct Grid {
-    b_matrix: BMatrix,
-    sys_time: Option<SystemTime>,
-    f_subview: FSubview,
-    f_user_offset: OffsetState,
-}
 
 struct BMatrix{
     vec: BMatrixVector,
@@ -298,6 +278,28 @@ enum BackendEngine{
     MultiThreaded(i32),
     Rayon,
     Skip
+}
+
+// ************  MAIN CODE  ************   
+#[derive(Clone,Copy)]
+pub struct Point{
+    x: f32,
+    y: f32
+}
+impl Point{
+    pub fn new(x:f32,y:f32)->Point{
+        if x < 0.0 || y < 0.0{
+            panic!("Point needs to be positive in both dimensions");
+        }
+        Point{x,y}
+    }
+}
+
+pub struct Grid {
+    b_matrix: BMatrix,
+    sys_time: Option<SystemTime>,
+    f_subview: FSubview,
+    f_user_offset: OffsetState,
 }
 //#[mockable]
 impl Grid {
@@ -364,46 +366,6 @@ impl Grid {
         self.f_subview.update_relative_offset(rel_offset_x,rel_offset_y);
         Ok(())
     }
-
-    // Smallest Bounding Sliding Window Version
-    //fn update_view(&mut self,ctx:&mut Context)->GameResult{
-        //// 1. get bounding boxes
-        //let offset_point = self.f_user_offset.get_point();
-        //let (top_idx,bottom_idx) = fsubview::get_vertical_range_of_view(offset_point.y);
-        //let (left_idx,right_idx) = fsubview::get_horizontal_range_of_view(offset_point.x);
-
-        //println!("Vertical Range: {}",bottom_idx-top_idx);
-        //println!("Horizontal Range: {}",right_idx-left_idx);
-        ////println!("Top idx: {}",top_idx);
-        ////println!("Bottom idx: {}",bottom_idx);
-        ////println!("Left idx: {}",left_idx);
-        ////println!("right idx: {}",right_idx);
-
-        //// 2. now draw from base_index_top -> base_index_bottom, inclusive
-        //self.f_subview.startView();
-        //for j in top_idx..bottom_idx+1{
-            //let relative_j = j - top_idx;
-            //for i in left_idx..right_idx+1{
-                //let relative_i = i - left_idx;
-
-                //if self.b_matrix.at(i,j)?{
-                    ////self.f_subview.change_to_white(i,j);
-                    //self.f_subview.addWhiteToView(relative_i,relative_j);
-                //}
-                //else{
-                    ////self.f_subview.change_to_black(i,j);
-                    //self.f_subview.addBlackToView(relative_i,relative_j);
-                //}
-            //}
-        //}
-        //self.f_subview.endView(ctx);
-        //// 3. finally define new relative offset
-        //// aka relative to the box at (left_idx,top_idx)
-        //let rel_offset_y = fsubview::get_distance_to_top(offset_point.y,top_idx)?;
-        //let rel_offset_x = fsubview::get_distance_to_left(offset_point.x,left_idx)?;
-        //self.f_subview.update_relative_offset(rel_offset_x,rel_offset_y);
-        //Ok(())
-    //}
 }
 
 
@@ -440,15 +402,10 @@ impl event::EventHandler for Grid {
 }
 
 pub fn main() -> GameResult {
-    //let NUM_BLOCKS_WIDTH:usize = get_worst_case_num_of_blocks(WINDOW_WIDTH);
-    //let NUM_BLOCKS_HEIGHT:usize = get_worst_case_num_of_blocks(WINDOW_HEIGHT);
-    //println!("NUM_BLOCKS_WIDTH: {}",NUM_BLOCKS_WIDTH);
-    //println!("NUM_BLOCKS_HEIGHT: {}",NUM_BLOCKS_HEIGHT);
-    //println!("NUM_BLOCKS_WIDTH2: {}",NUM_BLOCKS_WIDTH2);
-    //println!("NUM_BLOCKS_HEIGHT2: {}",NUM_BLOCKS_HEIGHT2);
-
     // ************  GRID  ************   
     let mut init_b_matrix_vector = BMatrixVector::default();
+    // Note: all patterns start drawing from the top leftmost corner of the
+    // "smallest bounding rectangle" of the pattern
     patterns::make_random(&mut init_b_matrix_vector);
     // ************  GGEZ  ************   
     let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
@@ -461,9 +418,12 @@ pub fn main() -> GameResult {
     let (ref mut ctx, ref mut event_loop) = cb.build()?;
     graphics::set_blend_mode(ctx,BlendMode::Replace)?;
 
-    //let origin_point = (GRID_SIZE/2) as f32;
+    // default start at (0,0), but can change if you want
+    // Note these numbers must be positive
     let origin_point = 0.0 as f32;
-    let update_method = BackendEngine::MultiThreaded(8);
+    //let update_method = BackendEngine::MultiThreaded(8);
+    //let update_method = BackendEngine::Single;
+    let update_method = BackendEngine::Rayon;
     let ref mut state = Grid::new(ctx,update_method)?
         .init_seed(init_b_matrix_vector)
         .init_offset(origin_point,origin_point);
@@ -576,7 +536,7 @@ mod tests {
         let bool_vec = vec![true,true,true,false,false,false,false];
 
         let test_vec = bool_vec.clone();
-        let mut b_matrix_vector = BMatrixVector::new(bool_vec);
+        let mut b_matrix_vector = BMatrixVector::new_for_test(bool_vec);
         let mut region_iterator = region_pool.create_iter_mut(&mut b_matrix_vector);
 
         if let Some((whole_slice,offset)) = region_iterator.next(){
@@ -592,7 +552,7 @@ mod tests {
     fn test_RegionPoolIterMut_step_through_next(){
         let worker_count = 3;
         let mut region_pool = RegionPool::new(worker_count);
-        let mut vec = BMatrixVector::new(vec![true,true,true,false,false,false,false]);
+        let mut vec = BMatrixVector::new_for_test(vec![true,true,true,false,false,false,false]);
         let mut region_iterator = region_pool.create_iter_mut(&mut vec);
         
         if let Some((slice1,offset1)) = region_iterator.next(){

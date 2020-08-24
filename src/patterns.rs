@@ -31,5 +31,43 @@ pub fn make_random(b_matrix_vector: &mut BMatrixVector){
     }
 }
 
-pub fn make_r_pentomino(b_matrix_vector: &mut BMatrixVector){
+pub fn make_r_pentomino(init_x:i32,init_y:i32,init_bmatrix_vector:&mut BMatrixVector){
+    // First column
+    *init_bmatrix_vector.at_mut(init_x,init_y).unwrap() = false;
+    *init_bmatrix_vector.at_mut(init_x,init_y+1).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x,init_y+2).unwrap() = false;
+    // Second column
+    *init_bmatrix_vector.at_mut(init_x+1,init_y).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+1,init_y+1).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+1,init_y+2).unwrap() = true;
+    //Third Column
+    *init_bmatrix_vector.at_mut(init_x+2,init_y).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+2,init_y+1).unwrap() = false;
+    *init_bmatrix_vector.at_mut(init_x+2,init_y+2).unwrap() = false;
 }
+
+pub fn make_glider(init_x:i32,init_y:i32,init_bmatrix_vector:&mut BMatrixVector){
+    // First Row
+    *init_bmatrix_vector.at_mut(init_x,init_y).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+1,init_y).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+2,init_y).unwrap() = true;
+    // Second Row
+    *init_bmatrix_vector.at_mut(init_x,init_y+1).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+1,init_y+1).unwrap() = false;
+    *init_bmatrix_vector.at_mut(init_x+2,init_y+1).unwrap() = false;
+    //Third Row
+    *init_bmatrix_vector.at_mut(init_x,init_y+2).unwrap() = false;
+    *init_bmatrix_vector.at_mut(init_x+1,init_y+2).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+2,init_y+2).unwrap() = false;
+}
+
+pub fn make_t(init_x:i32,init_y:i32,init_bmatrix_vector:&mut BMatrixVector){
+    // First Row
+    *init_bmatrix_vector.at_mut(init_x,init_y).unwrap() = false;
+    *init_bmatrix_vector.at_mut(init_x+1,init_y).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+2,init_y).unwrap() = false;
+    //Second Row
+    *init_bmatrix_vector.at_mut(init_x,init_y+1).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+1,init_y+1).unwrap() = true;
+    *init_bmatrix_vector.at_mut(init_x+2,init_y+1).unwrap() = true;
+    
