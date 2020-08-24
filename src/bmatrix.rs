@@ -1,11 +1,10 @@
 use std::ops::{Deref,DerefMut};
 use rayon::prelude::*;
+use super::*;
 
 // has to be on heap otherwise stack overflow
 pub struct BMatrixVector(Vec<bool>);
-unsafe impl Send for *const BMatrixVector{}
-
-use super::*;
+//unsafe impl Send for *const BMatrixVector{}
 
 // NOTE: For array indexing
 impl Deref for BMatrixVector{
@@ -75,8 +74,7 @@ impl BMatrixVector{
         right + down + left + up
     }
 
-    pub fn new_cell_value(&self,i:i32, j:i32, count:u32)-> bool{
-        let state = self.at(i,j).unwrap();
+    pub fn new_cell_value(&self, state:bool, count:u32)-> bool{
         match state{
             //dead transition
             false => {if count== 3 {true} else {false}}
@@ -91,8 +89,9 @@ impl BMatrixVector{
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{
                 let count = self.get_count(i,j);
-                let mut new_value_ref = new_results.at_mut(i,j).unwrap();
-                *new_value_ref = self.new_cell_value(i,j,count);
+                let state = self.at(i,j).unwrap();
+                let mut cell_ptr = new_results.at_mut(i,j).unwrap();
+                *cell_ptr = self.new_cell_value(state,count);
             }
         }
 
@@ -101,44 +100,40 @@ impl BMatrixVector{
     pub fn next_bmatrix_rayon(&self) -> BMatrixVector{
         let mut new_results = BMatrixVector::new();
 
-        new_results.par_iter_mut().enumerate().for_each(|(idx,value)| {
+        new_results.par_iter_mut().enumerate().for_each(|(idx,cell_ptr)| {
             let (i,j) = get_location_from_idx(idx);
             let count = par_get_count(i,j,&self);
-            *value = par_new_cell_value(i,j,count,&self);
+            *cell_ptr = par_new_cell_value(i,j,count,&self);
         });
 
         new_results
     }
-    pub fn next_bmatrix_threadpool(&self, region_pool: &RegionPool)-> BMatrixVector{
+
+//fn do_job(start_y:i32, end_y: i32, )
+    pub fn next_bmatrix_threadpool(&self, region_pool: &mut RegionPool)-> BMatrixVector{
         // ************  MULTITHREADED THREADPOOL  ************   
-        let new_results = BMatrixVector::new();
+        let mut new_results = BMatrixVector::new();
         // 0. allocate threadpool during Grid::new() DONE
         // 1. code to partition grid evenly into num_of_threads(also in setup) DONE
         // 2. start up each thread -> since they have a predefined job
-        for (start_y,end_y) in region_pool.work_region_list.iter(){
-            let start_y = start_y.clone();
-            let end_y = end_y.clone();
-            let vec_ptr = self as *const BMatrixVector;
-
-            region_pool.execute(move ||{
-                for j in start_y..end_y+1{
-                    for i in 0..GRID_SIZE{
-                        let count = (*vec_ptr).get_count(i,j);
-                        let mut new_value_ref = new_results.at_mut(i,j).unwrap();
-                        *new_value_ref = (*vec_ptr).new_cell_value(i,j,count);
+        region_pool.scoped(|scope|{
+            for (slice,iter_offset) in region_pool.create_iter_mut(&mut new_results){
+                scope.execute(move ||{
+                    for (rel_i,cell_ptr) in slice.enumerate(){
+                        let idx = rel_i + iter_offset;
+                        let (i,j) = get_location_from_idx(idx);
+                        let count = self.get_count(i,j);
+                        let state = self.at(i,j).unwrap();
+                        *cell_ptr = self.new_cell_value(state,count);
                     }
-                }
-            })
-        }
+                });
+            }
+            scope.join_all();
+        });
 
-        // Checking that values were not moved
-        for (start_y, end_y) in region_pool.work_region_list.iter(){
-            let x = start_y +1 ;
-        }
         
         // 3. join to wait
-        region_pool.join();
-
+        //pool.join_all();
         new_results
     }
 }

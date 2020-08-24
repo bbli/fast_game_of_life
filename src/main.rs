@@ -15,8 +15,10 @@ use ggez::{Context, GameResult};
 
 //use std::{thread,time};
 use std::time::{SystemTime,UNIX_EPOCH};
-use std::ops::Deref;
-use threadpool::ThreadPool;
+use std::ops::{Deref,DerefMut};
+//use std::mem;
+//use threadpool::ThreadPool;
+use scoped_threadpool::Pool;
 
 mod bmatrix;
 use bmatrix::*;
@@ -115,18 +117,101 @@ impl Point{
     }
 }
 
-struct RegionPool{
-    threadpool: ThreadPool,
-    work_region_list: Vec<(i32,i32)>
+pub struct RegionPool{
+    threadpool: Pool,
+    worker_count: i32
+}
+impl Default for RegionPool{
+    fn default()-> Self{
+        let worker_count:i32 = 8;
+        //let threadpool = Arc::new(ThreadPool::new(worker_count as usize));
+        let threadpool = Pool::new(worker_count as u32);
+        RegionPool{
+            threadpool,
+            worker_count
+        }
+    }
 }
 
-pub struct Grid {
-    b_matrix: BMatrixVector,
-    sys_time: Option<SystemTime>,
-    region_pool: RegionPool,
-    f_subview: FSubview,
-    // TODO: change name to user
-    f_user_offset: OffsetState,
+fn get_num_elems_each_time(worker_count: i32)->i32{
+    let num_rows_to_take = GRID_SIZE/worker_count;
+    let num_elems = num_rows_to_take*GRID_SIZE;
+    num_elems
+}
+
+impl RegionPool{
+    fn create_iter_mut<'a>(&mut self, vector: &'a mut BMatrixVector)->RegionPoolIterMut<'a>{
+        let num_elems_each_time = get_num_elems_each_time(self.worker_count);
+        let max_offset = num_elems_each_time*(self.worker_count-1);
+        RegionPoolIterMut{
+            ptr: &mut vector[..],
+            offset: 0,
+            num_elems_each_time,
+            max_offset
+        }
+    }
+}
+
+struct RegionPoolIterMut<'a>{
+    ptr: &'a mut [bool],
+    offset: i32,
+    num_elems_each_time: i32,
+    max_offset: i32
+}
+
+impl<'a> Iterator for RegionPoolIterMut<'a>{
+    type Item = (&'a mut [bool],i32);
+
+    // EC: at end when we need to take a bit more
+    fn next(&mut self) -> Option<Self::Item>{
+        // old offset "points" to offset we are about to return
+        let old_offset = self.offset;
+        self.offset += self.num_elems_each_time;
+        // after last case
+        if old_offset >= self.max_offset{
+            None
+        }
+        //// just return ptr
+        else if old_offset == self.max_offset{
+            // Since this works, self.ptr must have 'a lifetime
+            // even though self has local
+            let l = self.ptr;
+            self.ptr = &mut [];
+            //let slice = mem::replace(&mut self.ptr, &mut []);
+            //let l = slice;
+
+
+            Some((l,old_offset))
+        }
+        else{
+            // self.ptr.split_at_mut will pass in the local lifetime rather than  'a
+            //let (l,r) = self.ptr.split_at_mut(self.num_elems_each_time as usize);
+
+            // Rustonomicon uses mem::replace to resolve(slice doesn't do anything in Drop though?) -> though the below works too
+            let slice = self.ptr;
+            //let slice = mem::replace(&mut self.ptr, &mut []);
+
+
+            let (l,r) = slice.split_at_mut(self.num_elems_each_time as usize);
+            self.ptr = r;
+            Some((l,old_offset))
+        }
+
+
+    }
+}
+
+impl Deref for RegionPool{
+    type Target = Pool;
+    fn deref(&self) -> &Self::Target{
+        &self.threadpool
+    }
+}
+
+impl DerefMut for RegionPool{
+    fn deref_mut(&mut self) -> &mut Self::Target{
+        &mut self.threadpool
+    }
 }
 
 fn new_rect(i: i32, j: i32) -> Rect {
@@ -160,24 +245,13 @@ fn partition_grid(threads: i32)->Vec<(i32,i32)>{
     work_region_list
 }
 
-impl Default for RegionPool{
-    fn default()-> Self{
-        let worker_count:i32 = 8;
-        //let threadpool = Arc::new(ThreadPool::new(worker_count as usize));
-        let threadpool = ThreadPool::new(worker_count as usize);
-        let work_region_list = partition_grid(worker_count);
-        RegionPool{
-            threadpool,
-            work_region_list
-        }
-    }
-}
-
-impl Deref for RegionPool{
-    type Target = ThreadPool;
-    fn deref(&self) -> &Self::Target{
-        &self.threadpool
-    }
+pub struct Grid {
+    b_matrix: BMatrixVector,
+    sys_time: Option<SystemTime>,
+    region_pool: RegionPool,
+    f_subview: FSubview,
+    // TODO: change name to user
+    f_user_offset: OffsetState,
 }
 
 
@@ -219,7 +293,7 @@ impl Grid {
         // 2. Multi-Threaded with Rayon
         //self.b_matrix = self.b_matrix.next_bmatrix_rayon();
         // 3. Multi-Threaded with ThreadPool
-        self.b_matrix = self.b_matrix.next_bmatrix_threadpool(&self.region_pool)
+        self.b_matrix = self.b_matrix.next_bmatrix_threadpool(&mut self.region_pool);
     }
 
     // Invariant Sliding Window Version
