@@ -286,7 +286,7 @@ impl BMatrix{
             Rayon => {self.vec = self.next_b_matrix_rayon();}
             MultiThreaded(worker_count) => {
                 let region_pool = &mut self.region_pool;
-                self.vec = self.next_b_matrix_threadpool(region_pool);
+                self.vec = self.vec.next_b_matrix_threadpool(region_pool);
             }
             Skip => return
         }
