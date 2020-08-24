@@ -419,7 +419,7 @@ mod tests {
             })
         });
 
-        let mut globals = setup().unwrap();
+        let mut globals = setup(BackendEngine::Skip).unwrap();
         let black_image = Image::solid(&mut globals.ctx,CELL_SIZE as u16,BLACK!()).unwrap();
         let dummy = 125;
         let sprite_handler = SpriteBatchHandler::new(black_image,dummy,dummy);
@@ -436,7 +436,7 @@ mod tests {
             MockResult::Return(Ok(()))
         });
 
-        let mut globals = setup().unwrap();
+        let mut globals = setup(BackendEngine::Skip).unwrap();
         // 2. then change back to white
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
@@ -450,7 +450,7 @@ mod tests {
             MockResult::Return(Ok(()))
         });
 
-        let mut globals = setup().unwrap();
+        let mut globals = setup(BackendEngine::Skip).unwrap();
         // 2. then change back to white
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
@@ -458,7 +458,7 @@ mod tests {
     #[should_panic]
     #[test]
     fn test_SpriteBatchHandler_at_outOfBounds(){
-        let globals = setup().unwrap();
+        let globals = setup(BackendEngine::Skip).unwrap();
 
         // This test is contigent on Grid::new initalizing 
         // columns first
@@ -467,7 +467,7 @@ mod tests {
     }
     #[test]
     fn test_SpriteBatchHandler_at_rightAtEdge(){
-        let globals = setup().unwrap();
+        let globals = setup(BackendEngine::Skip).unwrap();
 
         // This test is contigent on Grid::new initalizing 
         // columns first
@@ -481,7 +481,7 @@ mod tests {
     // static/mutable 3)or pass global variable in as a function argument
     #[test]
     fn test_get_horizontal_window_range_small_window(){
-        let globals = setup().unwrap();
+        let globals = setup(BackendEngine::Skip).unwrap();
 
         let (left_idx,right_idx) = globals.grid.f_subview.get_horizontal_window_range(0.0, WINDOW_WIDTH as f32/2.0);
         assert_eq!(left_idx,0);
@@ -490,7 +490,7 @@ mod tests {
 
     #[test]
     fn test_get_horizontal_window_range_large_window(){
-        let globals = setup().unwrap();
+        let globals = setup(BackendEngine::Skip).unwrap();
 
         let right_edge_of_view = (GRID_SIZE-1) as f32 * (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
         let (left_idx,right_idx) = globals.grid.f_subview.get_horizontal_window_range(0.0, right_edge_of_view);
@@ -498,7 +498,7 @@ mod tests {
     }
     #[test]
     fn test_get_vertical_window_range_small_window(){
-        let globals = setup().unwrap();
+        let globals = setup(BackendEngine::Skip).unwrap();
 
         let (left_idx,right_idx) = globals.grid.f_subview.get_vertical_window_range(0.0, WINDOW_HEIGHT as f32/2.0);
         assert_eq!(left_idx,0);
@@ -507,7 +507,7 @@ mod tests {
 
     #[test]
     fn test_get_vertical_window_range_large_window(){
-        let globals = setup().unwrap();
+        let globals = setup(BackendEngine::Skip).unwrap();
 
         let bottom_edge_of_view = (GRID_SIZE-1) as f32 * (CELL_SIZE+CELL_GAP) + CELL_SIZE/2.0;
         let (top_idx,bottom_idx) = globals.grid.f_subview.get_vertical_window_range(0.0, bottom_edge_of_view);

@@ -4,10 +4,8 @@
 #![warn(clippy::all)]
 //! The simplest possible example that does something.
 
-use ggez::conf;
-use ggez::event;
 use ggez::event::KeyCode;
-use ggez::graphics;
+use ggez::{conf,event,graphics};
 use ggez::input::keyboard;
 use ggez::error::GameError;
 use ggez::graphics::{DrawMode, Image, Rect,DrawParam,BlendMode};
@@ -30,7 +28,7 @@ use fsubview::FSubview;
 mod user;
 use user::OffsetState;
 
-mod setup;
+mod patterns;
 //use fsubview;
 #[cfg(test)]
 use mocktopus::macros::*;
@@ -217,62 +215,77 @@ impl DerefMut for RegionPool{
     }
 }
 
-fn new_rect(i: i32, j: i32) -> Rect {
-    let i = i as f32;
-    let j = j as f32;
-    Rect::new(
-        i * (CELL_SIZE as f32 + CELL_GAP),
-        j * (CELL_SIZE as f32 + CELL_GAP),
-        CELL_SIZE as f32,
-        CELL_SIZE as f32,
-    )
-}
 // Split the grid horizontally so that each thread can index like
 // for j in (start_y,end_y)
-fn partition_grid(threads: i32)->Vec<(i32,i32)>{
-    let mut work_region_list = Vec::new();
-    let num_rows = GRID_SIZE/threads;
-    for i in 0..threads{
-        let start_y;
-        let end_y;
-        if i == threads-1{
-            start_y = i*num_rows;
-            end_y = GRID_SIZE-1;
-        }
-        else{
-            start_y = i*num_rows;
-            end_y = (i+1)*num_rows -1;
-        }
-        work_region_list.push((start_y,end_y))
-    }
-    work_region_list
-}
+//fn partition_grid(threads: i32)->Vec<(i32,i32)>{
+    //let mut work_region_list = Vec::new();
+    //let num_rows = GRID_SIZE/threads;
+    //for i in 0..threads{
+        //let start_y;
+        //let end_y;
+        //if i == threads-1{
+            //start_y = i*num_rows;
+            //end_y = GRID_SIZE-1;
+        //}
+        //else{
+            //start_y = i*num_rows;
+            //end_y = (i+1)*num_rows -1;
+        //}
+        //work_region_list.push((start_y,end_y))
+    //}
+    //work_region_list
+//}
 
 pub struct Grid {
-    b_matrix: BMatrixVector,
+    b_matrix: BMatrix,
     sys_time: Option<SystemTime>,
-    region_pool: RegionPool,
     f_subview: FSubview,
-    // TODO: change name to user
     f_user_offset: OffsetState,
 }
 
+struct BMatrix{
+    vec: BMatrixVector,
+    update_method: BackendEngine,
+    region_pool: RegionPool
+}
 
+impl BMatrix{
+    fn new(update_method: BackendEngine)-> Self{
+        use BackendEngine::*;
+        let vec = BMatrixVector::default();
+        // Note: using update match ergonomics
+        let region_pool = match &update_method{
+            Single | Rayon | Skip => RegionPool::new(1),
+            MultiThreaded(x) => RegionPool::new(*x),
+        };
+        BMatrix{
+            vec,
+            update_method,
+            region_pool
+        }
+    }
+}
+
+enum BackendEngine{
+    Single,
+    MultiThreaded(i32),
+    Rayon,
+    Skip
+}
 //#[mockable]
 impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
-    fn new(ctx: &mut Context) -> GameResult<Grid> {
+    fn new(ctx: &mut Context, update_method: BackendEngine) -> GameResult<Grid> {
         
-        let b_matrix = BMatrixVector::default();
+
+        let b_matrix = BMatrix::new(update_method);
         let sys_time = None;
         let f_subview = FSubview::new(ctx)?;
         let f_user_offset = OffsetState::default();
-        let region_pool = RegionPool::new(1);
     
         Ok(Grid{
             b_matrix, 
             sys_time,
-            region_pool,
             f_subview,
             f_user_offset
             }
@@ -417,7 +430,7 @@ pub fn main() -> GameResult {
 
     // ************  GRID  ************   
     let mut init_bmatrix = BMatrixVector::default();
-    setup::make_random(&mut init_bmatrix);
+    patterns::make_random(&mut init_bmatrix);
     // ************  GGEZ  ************   
     let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
         conf::WindowMode::default()
@@ -428,15 +441,19 @@ pub fn main() -> GameResult {
     // ************  RUNNING  ************   
     let (ref mut ctx, ref mut event_loop) = cb.build()?;
     graphics::set_blend_mode(ctx,BlendMode::Replace);
+
     //let origin_point = (GRID_SIZE/2) as f32;
     let origin_point = 0.0 as f32;
-    let ref mut state = Grid::new(ctx)?.init_seed(init_bmatrix).init_offset(origin_point,origin_point);
+    let update_method = BackendEngine::MultiThreaded(8);
+    let ref mut state = Grid::new(ctx,update_method)?
+        .init_seed(init_bmatrix)
+        .init_offset(origin_point,origin_point);
     event::run(ctx, event_loop, state)
 }
 #[cfg(test)]
 mod tests {
     // ************  SETUP  ************   
-    pub use ggez::conf;
+    pub use ggez::{conf,event,graphics};
     pub use ggez::{Context, GameResult};
     pub use ggez::event::EventsLoop;
     pub use super::*;
@@ -448,7 +465,7 @@ mod tests {
         pub event_loop: EventsLoop,
         pub grid: Grid
     }
-    pub fn setup() -> GameResult<Globals>{
+    pub fn setup(update_method: BackendEngine) -> GameResult<Globals>{
         let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
             conf::WindowMode::default()
                 .resizable(true)
@@ -456,7 +473,8 @@ mod tests {
         );
         let (mut ctx ,mut event_loop) = cb.build()?;
         // initialize a Grid object
-        let grid = Grid::new(&mut ctx)?;
+        let grid = Grid::new(&mut ctx,update_method)?;
+        graphics::set_blend_mode(&mut ctx,BlendMode::Replace);
         Ok(Globals{ctx,event_loop,grid})
     }
     // ************  ACTUAL TESTING  ************   
@@ -480,7 +498,6 @@ mod tests {
     #[test]
     #[ignore]
     fn test_update_view_before_offset(){
-        // NOTE: turn off next_bmatrix() before executing this
         let mut init_bmatrix = BMatrixVector::default();
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{
@@ -492,7 +509,8 @@ mod tests {
             }
         }
 
-        let ref mut globals = setup().unwrap();
+        // NOTE: turn off next_bmatrix() before executing this
+        let ref mut globals = setup(BackendEngine::Skip).unwrap();
         globals.grid.b_matrix = init_bmatrix;
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }
@@ -514,7 +532,7 @@ mod tests {
             }
         }
 
-        let mut globals = setup().unwrap();
+        let mut globals = setup(BackendEngine::Skip).unwrap();
         globals.grid = globals.grid.init_offset(user::get_max_offset_x(),0.0);
         globals.grid.b_matrix = init_bmatrix;
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
@@ -586,7 +604,7 @@ mod tests {
 
     //#[test]
     //fn test_draw_off_grid_doesnt_panic(){
-        //let mut globals = setup().unwrap();
+        //let mut globals = setup(BackendEngine::Skip).unwrap();
 
         //// create modified spritebatch. Note the grid's f_subview will be wrong
         //let image = Image::solid(&mut globals.ctx,CELL_SIZE,BLACK!()).unwrap();

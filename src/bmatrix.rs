@@ -193,7 +193,8 @@ mod tests {
         );
         let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
         // initialize a Grid object
-        let grid = Grid::new(ctx).unwrap();
+        let update_method = BackendEngine::Skip
+        let grid = Grid::new(ctx,update_method).unwrap();
         // Check that a point close to origin
         let value = grid.b_matrix.at(1,1).unwrap();
         assert_eq!(value,false);
@@ -206,7 +207,7 @@ mod tests {
     #[test]
     fn test_BMatrixVector_at_outOfBounds(){
         println!("HI!!!!!!");
-        let globals = setup().unwrap();
+        let globals = setup(BackendEngine::Skip).unwrap();
 
         let value = globals.grid.b_matrix.at((2*GRID_SIZE) as i32,0).unwrap();
     }
@@ -321,7 +322,7 @@ mod tests {
             MockResult::Return(new_results)
         });
 
-        let mut globals = setup().unwrap();
+        let mut globals = setup(BackendEngine::MultiThreaded(7)).unwrap();
         // should only update the first section of rows
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut globals.grid);
     }

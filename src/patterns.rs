@@ -30,3 +30,6 @@ pub fn make_random(b_matrix: &mut BMatrixVector){
         }
     }
 }
+
+pub fn make_r_pentomino(b_matrix: &mut BMatrixVector){
+}
