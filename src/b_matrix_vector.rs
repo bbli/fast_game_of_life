@@ -37,29 +37,40 @@ fn get_location_from_idx(idx:usize)->(i32,i32){
     let j = (idx - i) / GRID_SIZE;
     (i,j)
 }
-fn par_convert_bool(i:i32,j:i32,b_matrix_vector:&BMatrixVector)-> u32{
-        match b_matrix_vector.at(i,j){
-            Ok(value) => if value {1}else {0},
-            //EC: off screen
-            Err(_) => 0
+
+mod life{
+    use super::*;
+    pub fn convert_bool(i:i32,j:i32,b_matrix_vector:&BMatrixVector)-> u32{
+            match b_matrix_vector.at(i,j){
+                Ok(value) => if value {1}else {0},
+                //EC: off screen
+                Err(_) => 0
+            }
+    }
+
+    // since we are using this to survey around, x and y can now be negative
+    // but "at" method covers this error handling
+    // TODO: time how fast w/o local variables + refactor into 3 by 3 permutation
+    pub fn get_count(i:i32,j:i32,b_matrix_vector: &BMatrixVector)->u32{
+            let right = convert_bool(i+1,j,b_matrix_vector);
+            let right_down = convert_bool(i+1,j+1,b_matrix_vector);
+            let down = convert_bool(i,j+1,b_matrix_vector);
+            let down_left = convert_bool(i-1,j+1,b_matrix_vector);
+            let left = convert_bool(i-1,j,b_matrix_vector);
+            let left_up = convert_bool(i-1,j-1,b_matrix_vector);
+            let up = convert_bool(i,j-1,b_matrix_vector);
+            let up_right = convert_bool(i+1,j-1,b_matrix_vector);
+
+            right + down + left + up + right_down + down_left + left_up + up_right
+    }
+
+    pub fn new_cell_value(state: bool,count:u32,b_matrix_vector:&BMatrixVector) -> bool{
+        match state{
+            //dead transition
+            false => {if count== 3 {true} else {false}}
+            //alive transition
+            true => {if count == 2 || count == 3 {true} else {false}}
         }
-}
-
-fn par_get_count(i:i32,j:i32,b_matrix_vector: &BMatrixVector)->u32{
-        let right = par_convert_bool(i+1,j,b_matrix_vector);
-        let down = par_convert_bool(i,j+1,b_matrix_vector);
-        let left = par_convert_bool(i-1,j,b_matrix_vector);
-        let up = par_convert_bool(i,j-1,b_matrix_vector);
-        right + down + left + up
-}
-
-fn par_new_cell_value(i:i32,j:i32,count:u32,b_matrix_vector:&BMatrixVector) -> bool{
-    let state = b_matrix_vector.at(i,j).unwrap();
-    match state{
-        //dead transition
-        false => {if count== 3 {true} else {false}}
-        //alive transition
-        true => {if count == 2 || count == 3 {true} else {false}}
     }
 }
 
@@ -69,41 +80,15 @@ impl BMatrixVector{
     pub fn new_for_test(vec: Vec<bool>)->Self{
         BMatrixVector(vec)
     }
-    fn convert_bool(&self,x:i32,y:i32)-> u32{
-        match self.at(x,y){
-            Ok(value) => if value {1}else {0},
-            //EC: off screen
-            Err(_) => 0
-        }
-    }
-    // since we are using this to survey around, x and y can now be negative
-    // but "at" method covers this error handling
-    fn get_count(&self, i:i32,j:i32)-> u32{
-        let right = self.convert_bool(i+1,j);
-        let down = self.convert_bool(i,j+1);
-        let left = self.convert_bool(i-1,j);
-        let up = self.convert_bool(i,j-1);
-        right + down + left + up
-    }
-
-    fn new_cell_value(&self, state:bool, count:u32)-> bool{
-        match state{
-            //dead transition
-            false => {if count== 3 {true} else {false}}
-            //alive transition
-            true => {if count == 2 || count == 3 {true} else {false}}
-        }
-    }
-
     pub fn next_b_matrix(&self)-> BMatrixVector{
         let mut new_results = BMatrixVector::default();
 
         for j in 0..GRID_SIZE{
             for i in 0..GRID_SIZE{
-                let count = self.get_count(i,j);
+                let count = life::get_count(i,j,&self);
                 let state = self.at(i,j).unwrap();
                 let mut cell_ptr = new_results.at_mut(i,j).unwrap();
-                *cell_ptr = self.new_cell_value(state,count);
+                *cell_ptr = life::new_cell_value(state,count,&self);
             }
         }
 
@@ -115,8 +100,9 @@ impl BMatrixVector{
 
         new_results.par_iter_mut().enumerate().for_each(|(idx,cell_ptr)| {
             let (i,j) = get_location_from_idx(idx);
-            let count = par_get_count(i,j,&self);
-            *cell_ptr = par_new_cell_value(i,j,count,&self);
+            let count = life::get_count(i,j,&self);
+            let state = self.at(i,j).unwrap();
+            *cell_ptr = life::new_cell_value(state,count,&self);
         });
 
         new_results
@@ -139,9 +125,9 @@ impl BMatrixVector{
                     for (rel_i,cell_ptr) in slice.iter_mut().enumerate(){
                         let idx = rel_i + iter_offset as usize;
                         let (i,j) = get_location_from_idx(idx);
-                        let count = self.get_count(i,j);
+                        let count = life::get_count(i,j,&self);
                         let state = self.at(i,j).unwrap();
-                        *cell_ptr = self.new_cell_value(state,count);
+                        *cell_ptr = life::new_cell_value(state,count,&self);
                     }
                 });
             }
@@ -209,9 +195,11 @@ mod tests {
     #[test]
     fn test_BMatrixVector_at_outOfBounds(){
         println!("HI!!!!!!");
-        let globals = setup(BackendEngine::Skip).unwrap();
+        let mut globals = setup().unwrap();
+        let update_method = BackendEngine::Skip;
+        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
-        let value = globals.grid.b_matrix.at((2*GRID_SIZE) as i32,0).unwrap();
+        let value = grid.b_matrix.at((2*GRID_SIZE) as i32,0).unwrap();
     }
 
     #[test]
@@ -230,23 +218,6 @@ mod tests {
     }
 
     #[test]
-    fn test_update_b_matrix_single_cell_become_alive(){
-        let mut b_matrix_vector = BMatrixVector::default();
-        let i = 40;
-        let j = 40;
-        *b_matrix_vector.at_mut(i+1,j).unwrap() = true;
-        *b_matrix_vector.at_mut(i,j+1).unwrap() = true;
-        *b_matrix_vector.at_mut(i-1,j).unwrap() = true;
-
-        let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
-
-        assert_eq!(next_b_matrix_vector.at(i,j).unwrap(),true);
-        assert_eq!(next_b_matrix_vector.at(i+1,j).unwrap(),false);
-        assert_eq!(next_b_matrix_vector.at(i,j+1).unwrap(),false);
-        assert_eq!(next_b_matrix_vector.at(i-1,j).unwrap(),false);
-    }
-
-    #[test]
     fn test_update_b_matrix_edge_cell_become_alive(){
         let mut b_matrix_vector = BMatrixVector::default();
         let i = GRID_SIZE-1;
@@ -260,7 +231,7 @@ mod tests {
         let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
 
         assert_eq!(next_b_matrix_vector.at(i,j+1).unwrap(),false);
-        assert_eq!(next_b_matrix_vector.at(i-1,j).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i-1,j).unwrap(),true);
         assert_eq!(next_b_matrix_vector.at(i,j-1).unwrap(),false);
         assert_eq!(next_b_matrix_vector.at(i,j).unwrap(),true);
     }
@@ -270,8 +241,6 @@ mod tests {
         let mut b_matrix_vector = BMatrixVector::default();
         let i = GRID_SIZE-1;
         let j = GRID_SIZE-1;
-        let i = i as i32;
-        let j = j as i32;
 
         *b_matrix_vector.at_mut(i,j-1).unwrap() = true;
         *b_matrix_vector.at_mut(i-1,j).unwrap() = true;
@@ -280,8 +249,8 @@ mod tests {
         let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
 
         assert_eq!(next_b_matrix_vector.at(i,j).unwrap(),true);
-        assert_eq!(next_b_matrix_vector.at(i,j-1).unwrap(),false);
-        assert_eq!(next_b_matrix_vector.at(i-1,j).unwrap(),false);
+        assert_eq!(next_b_matrix_vector.at(i,j-1).unwrap(),true);
+        assert_eq!(next_b_matrix_vector.at(i-1,j).unwrap(),true);
     }
 
     #[test]
@@ -310,9 +279,9 @@ mod tests {
                         for (rel_i,cell_ptr) in first_slice.iter_mut().enumerate(){
                             let idx = rel_i + first_offset as usize;
                             let (i,j) = get_location_from_idx(idx);
-                            let count = my_self.get_count(i,j);
+                            let count = life::get_count(i,j,&my_self);
                             let state = my_self.at(i,j).unwrap();
-                            *cell_ptr = my_self.new_cell_value(state,count);
+                            *cell_ptr = life::new_cell_value(state,count,&my_self);
                         }
                     })
                 }
@@ -328,7 +297,7 @@ mod tests {
         let init_b_matrix_vector = BMatrixVector::default();
         //TODO: change pattern
         let update_method = BackendEngine::MultiThreaded(7);
-        let grid = Grid::new(&mut globals.ctx,update_method).unwrap()
+        let mut grid = Grid::new(&mut globals.ctx,update_method).unwrap()
             .init_seed(init_b_matrix_vector);
 
         // should only update the first section of rows

@@ -437,7 +437,7 @@ mod tests {
 
         let mut globals = setup().unwrap();
         let update_method = BackendEngine::Skip;
-        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
+        let mut grid = Grid::new(&mut globals.ctx,update_method).unwrap();
         // 2. then change back to white
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);
     }
@@ -453,7 +453,7 @@ mod tests {
 
         let mut globals = setup().unwrap();
         let update_method = BackendEngine::Skip;
-        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
+        let mut grid = Grid::new(&mut globals.ctx,update_method).unwrap();
         // 2. then change back to white
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);
     }
@@ -472,9 +472,9 @@ mod tests {
     }
     #[test]
     fn test_SpriteBatchHandler_at_rightAtEdge(){
-        let globals = setup().unwrap();
+        let mut globals = setup().unwrap();
         let update_method = BackendEngine::Skip;
-        let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
+        let mut grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
         // This test is contigent on Grid::new initalizing 
         // columns first
@@ -485,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_get_horizontal_window_range_small_window(){
-        let globals = setup().unwrap();
+        let mut globals = setup().unwrap();
         let update_method = BackendEngine::Skip;
         let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
@@ -496,7 +496,7 @@ mod tests {
 
     #[test]
     fn test_get_horizontal_window_range_large_window(){
-        let globals = setup().unwrap();
+        let mut globals = setup().unwrap();
         let update_method = BackendEngine::Skip;
         let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
@@ -506,7 +506,7 @@ mod tests {
     }
     #[test]
     fn test_get_vertical_window_range_small_window(){
-        let globals = setup().unwrap();
+        let mut globals = setup().unwrap();
         let update_method = BackendEngine::Skip;
         let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn test_get_vertical_window_range_large_window(){
-        let globals = setup().unwrap();
+        let mut globals = setup().unwrap();
         let update_method = BackendEngine::Skip;
         let grid = Grid::new(&mut globals.ctx,update_method).unwrap();
 

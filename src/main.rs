@@ -19,8 +19,8 @@ use std::cmp::Ordering;
 //use threadpool::ThreadPool;
 use scoped_threadpool::Pool;
 
-mod bmatrix_vector;
-use bmatrix_vector::*;
+mod b_matrix_vector;
+use b_matrix_vector::*;
 
 mod fsubview;
 use fsubview::FSubview;
@@ -101,6 +101,7 @@ macro_rules! GREY {
 }
 
 // ************  Threading Code  ************   
+//(TODO: should probably refactor this and bmatrix_vector.rs into its own folder)
 
 pub struct RegionPool{
     threadpool: Pool,
@@ -405,14 +406,15 @@ pub fn main() -> GameResult {
     // ************  GRID  ************   
     // NOTE: all patterns start drawing from the top leftmost corner of the
     // "smallest bounding rectangle" of the pattern
-    let start_point = (0,500);
+    let start_point = (0,150);
     let mut init_b_matrix_vector = patterns::PatternBuilder::new()
-        .make_square(0,0)
-        .make_blinker(10,10)
-        .make_t(100,100)
-        .make_r_pentomino(400,400)
-        .make_glider(800,800)
-        .make_random(start_point,400,500)
+        //.make_square(0,0)
+        //.make_blinker(5,5)
+        //.make_t(12,12)
+        //.make_r_pentomino(30,30)
+        //.make_glider(60,60)
+        //.make_random(start_point,400,500)
+        .make_random((0,0),GRID_SIZE,GRID_SIZE)
         .build();
     // ************  GGEZ  ************   
     let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
@@ -494,10 +496,10 @@ mod tests {
             }
         }
 
-        let ref mut globals = setup().unwrap();
+        let mut globals = setup().unwrap();
 
         let update_method = BackendEngine::Skip;
-        let grid = Grid::new(&mut globals.ctx,update_method).unwrap()
+        let mut grid = Grid::new(&mut globals.ctx,update_method).unwrap()
             .init_seed(init_b_matrix_vector);
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);
     }
@@ -522,7 +524,7 @@ mod tests {
         let mut globals = setup().unwrap();
 
         let update_method = BackendEngine::Skip;
-        let grid = Grid::new(&mut globals.ctx,update_method).unwrap()
+        let mut grid = Grid::new(&mut globals.ctx,update_method).unwrap()
             .init_offset(user::get_max_offset_x(),0.0)
             .init_seed(init_b_matrix_vector);
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);

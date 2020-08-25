@@ -294,8 +294,9 @@ mod tests {
     #[ignore]
     fn test_transition_bottom_right_corner(){
         // ************  GRID  ************   
-        let mut init_b_matrix_vector = BMatrixVector::default();
-        patterns::make_random(&mut init_b_matrix_vector);
+        let mut init_b_matrix_vector = patterns::PatternBuilder::new()
+            .make_random((0,0),GRID_SIZE,GRID_SIZE)
+            .build();
         // ************  GGEZ  ************   
         let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
             conf::WindowMode::default()
@@ -317,8 +318,9 @@ mod tests {
     #[ignore]
     fn test_transition_top_left_corner(){
         // ************  GRID  ************   
-        let mut init_b_matrix_vector = BMatrixVector::default();
-        patterns::make_random(&mut init_b_matrix_vector);
+        let mut init_b_matrix_vector = patterns::PatternBuilder::new()
+            .make_random((0,0),GRID_SIZE,GRID_SIZE)
+            .build();
         // ************  GGEZ  ************   
         let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
             conf::WindowMode::default()
