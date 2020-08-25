@@ -25,7 +25,7 @@ pub enum OffsetState {
 }
 impl Default for OffsetState {
     fn default() -> Self {
-        OffsetState::TopRightCorner(Point::new(0.0, 0.0))
+        OffsetState::TopLeftCorner(Point::new(0.0, 0.0))
     }
 }
 
@@ -57,6 +57,8 @@ impl OffsetState {
         if keyboard::is_key_pressed(ctx,KeyCode::Down){
             *self = transition_offset_state_down(*self);
         }
+
+        println!("Point: {:?}",self.get_point());
     }
 }
 
@@ -333,8 +335,7 @@ mod tests {
         graphics::set_blend_mode(ctx,BlendMode::Replace);
         let update_method = BackendEngine::Rayon;
         let ref mut state = Grid::new(ctx,update_method).unwrap()
-            .init_seed(init_b_matrix_vector)
-            .init_offset(0.0,0.0);
+            .init_seed(init_b_matrix_vector);
         event::run(ctx, event_loop, state);
     }
 }

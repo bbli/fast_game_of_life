@@ -282,15 +282,16 @@ enum BackendEngine{
 }
 
 // ************  MAIN CODE  ************   
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Debug)]
 pub struct Point{
     x: f32,
     y: f32
 }
+
 impl Point{
     pub fn new(x:f32,y:f32)->Point{
         if x < 0.0 || y < 0.0{
-            panic!("Point needs to be positive in both dimensions");
+            panic!(format!("Point needs to be positive in both dimensions.\n current x: {}\n current y: {}",x,y));
         }
         Point{x,y}
     }
@@ -329,8 +330,13 @@ impl Grid {
 
     // NOTE: Please initialize to a region inside
     fn init_offset(mut self, x:f32, y:f32) -> Self{
-        self.f_user_offset = OffsetState::Inside(Point::new(x,y));
-        self
+        if x > 0.0 && y > 0.0 {
+            self.f_user_offset = OffsetState::Inside(Point::new(x,y));
+            self
+        }
+        else{
+            panic!("Please set initial offset to be positive. Default is at (0.0,0.0)");
+        }
     }
 
 
@@ -428,11 +434,11 @@ pub fn main() -> GameResult {
     graphics::set_blend_mode(ctx,BlendMode::Replace)?;
 
     // default start at (0,0), but can change if you want
-    // Note these numbers must be positive
-    let origin_point = 0.0 as f32;
-    //let update_method = BackendEngine::MultiThreaded(8);
+    // Note these numbers must be positive or will panic
+    let origin_point = 0.1 as f32;
+    let update_method = BackendEngine::MultiThreaded(8);
     //let update_method = BackendEngine::Single;
-    let update_method = BackendEngine::Rayon;
+    //let update_method = BackendEngine::Rayon;
     let ref mut state = Grid::new(ctx,update_method)?
         .init_seed(init_b_matrix_vector)
         .init_offset(origin_point,origin_point);
@@ -525,7 +531,7 @@ mod tests {
 
         let update_method = BackendEngine::Skip;
         let mut grid = Grid::new(&mut globals.ctx,update_method).unwrap()
-            .init_offset(user::get_max_offset_x(),0.0)
+            .init_offset(user::get_max_offset_x(),0.1)
             .init_seed(init_b_matrix_vector);
         event::run(&mut globals.ctx,&mut globals.event_loop,&mut grid);
     }

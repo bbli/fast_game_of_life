@@ -16,7 +16,7 @@ rpath = false
 
 
 [profile.dev]
-opt-level = 0
+opt-level = 3
 # turn on only you need to debug, as cargo run will use this profile
 debug = true
 debug-assertions=true

@@ -271,7 +271,7 @@ mod tests {
         // make sure to change this too
         BMatrixVector::next_b_matrix_threadpool.mock_safe(|my_self:&BMatrixVector,region_pool:&mut RegionPool|{
             let mut new_results = BMatrixVector::default();
-            // unlike in for loop, we are not going to move region_iterator
+             //unlike in original code, we are not going to move region_iterator
             let mut region_iterator = region_pool.create_iter_mut(&mut new_results);
             region_pool.scoped(|scope|{
                 if let Some((first_slice,first_offset)) = region_iterator.next(){
@@ -294,9 +294,11 @@ mod tests {
         });
 
         let mut globals = setup().unwrap();
-        let init_b_matrix_vector = BMatrixVector::default();
-        //TODO: change pattern
-        let update_method = BackendEngine::MultiThreaded(7);
+        let init_b_matrix_vector = patterns::PatternBuilder::new()
+            .make_random((0,0),GRID_SIZE,GRID_SIZE)
+            .build();
+        let update_method = BackendEngine::MultiThreaded(100);
+        //let update_method = BackendEngine::Rayon;
         let mut grid = Grid::new(&mut globals.ctx,update_method).unwrap()
             .init_seed(init_b_matrix_vector);
 
