@@ -52,16 +52,22 @@ mod life{
     // but "at" method covers this error handling
     // TODO: time how fast w/o local variables + refactor into 3 by 3 permutation
     pub fn get_count(i:i32,j:i32,b_matrix_vector: &BMatrixVector)->u32{
-            let right = convert_bool(i+1,j,b_matrix_vector);
-            let right_down = convert_bool(i+1,j+1,b_matrix_vector);
-            let down = convert_bool(i,j+1,b_matrix_vector);
-            let down_left = convert_bool(i-1,j+1,b_matrix_vector);
-            let left = convert_bool(i-1,j,b_matrix_vector);
-            let left_up = convert_bool(i-1,j-1,b_matrix_vector);
-            let up = convert_bool(i,j-1,b_matrix_vector);
-            let up_right = convert_bool(i+1,j-1,b_matrix_vector);
-
-            right + down + left + up + right_down + down_left + left_up + up_right
+        let mut total = 0;
+        total += convert_bool(i+1,j,b_matrix_vector);
+        total += convert_bool(i+1,j+1,b_matrix_vector);
+        total += convert_bool(i,j+1,b_matrix_vector);
+        total += convert_bool(i-1,j+1,b_matrix_vector);
+        total += convert_bool(i-1,j,b_matrix_vector);
+        total += convert_bool(i-1,j-1,b_matrix_vector);
+        total += convert_bool(i,j-1,b_matrix_vector);
+        total + convert_bool(i+1,j-1,b_matrix_vector)
+        //let total= 0;
+        //for delta_y in -1..2{
+            //for delta_x in -1..2{
+                //total += convert_bool(i+delta_x,j+delta_y);
+            //}
+        //}
+        //return total - convert_bool(i,j,b_matrix_vector)
     }
 
     pub fn new_cell_value(state: bool,count:u32,b_matrix_vector:&BMatrixVector) -> bool{
@@ -142,28 +148,27 @@ impl BMatrixVector{
 impl MatrixView for BMatrixVector{
     type Item = bool;
     fn at(&self, i:i32, j:i32) -> GameResult<Self::Item>{
-        if i < 0 || j < 0 {
-            Err(GameError::EventLoopError("IndexError(b_matrix.at): i and j must be nonnegative".to_string()))
-        }
-        else if i >= GRID_SIZE || j>= GRID_SIZE {
-        //if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
-            Err(GameError::EventLoopError(format!("IndexError: b_matrix_vector's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
-        }
-        else{
+        if i >= 0 && j >= 0  && i < GRID_SIZE && j < GRID_SIZE{
             //bool is copy type, so moving is fine
             Ok(self.0[(j*GRID_SIZE +i) as usize])
         }
-    }
-    fn at_mut<'a>(&'a mut self, i:i32, j:i32) -> GameResult<&'a mut Self::Item>{
-        if i < 0 || j < 0 {
-            Err(GameError::EventLoopError("IndexError(b_matrix.at): i and j must be nonnegative".to_string()))
-        }
         else if i >= GRID_SIZE || j>= GRID_SIZE {
         //if i< GRID_SIZE && j<GRID_SIZE && i>=0 && j>=0{
             Err(GameError::EventLoopError(format!("IndexError: b_matrix_vector's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
         }
         else{
+            Err(GameError::EventLoopError("IndexError(b_matrix.at): i and j must be nonnegative".to_string()))
+        }
+    }
+    fn at_mut<'a>(&'a mut self, i:i32, j:i32) -> GameResult<&'a mut Self::Item>{
+        if i >= 0 && j >= 0  && i < GRID_SIZE && j < GRID_SIZE{
             Ok(&mut self.0[(j*GRID_SIZE +i) as usize])
+        }
+        else if i >= GRID_SIZE || j>= GRID_SIZE {
+            Err(GameError::EventLoopError(format!("IndexError: b_matrix_vector's i must be less than {} and j must be less than {}",GRID_SIZE,GRID_SIZE)))
+        }
+        else{
+            Err(GameError::EventLoopError("IndexError(b_matrix.at): i and j must be nonnegative".to_string()))
         }
     }
 }

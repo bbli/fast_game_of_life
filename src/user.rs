@@ -1,5 +1,21 @@
 use super::*;
 
+#[derive(Clone,Copy,Debug)]
+pub struct Point{
+    pub x: f32,
+    pub y: f32
+}
+
+impl Point{
+    //NOTE: we will not check the maximum
+    pub fn new(x:f32,y:f32)->Point{
+        if x < 0.0 || y < 0.0{
+            panic!(format!("Point needs to be positive in both dimensions.\n current x: {}\n current y: {}",x,y));
+        }
+        Point{x,y}
+    }
+}
+
 
 pub fn get_max_offset_x() -> f32 {
     (GRID_SIZE - 1) as f32 * (CELL_SIZE + CELL_GAP) + CELL_SIZE - WINDOW_WIDTH as f32
@@ -58,7 +74,7 @@ impl OffsetState {
             *self = transition_offset_state_down(*self);
         }
 
-        println!("Point: {:?}",self.get_point());
+        //println!("Point: {:?}",self.get_point());
     }
 }
 

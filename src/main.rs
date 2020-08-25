@@ -26,7 +26,7 @@ mod fsubview;
 use fsubview::FSubview;
 
 mod user;
-use user::OffsetState;
+use user::{OffsetState,Point};
 
 mod patterns;
 //use fsubview;
@@ -282,20 +282,6 @@ enum BackendEngine{
 }
 
 // ************  MAIN CODE  ************   
-#[derive(Clone,Copy,Debug)]
-pub struct Point{
-    x: f32,
-    y: f32
-}
-
-impl Point{
-    pub fn new(x:f32,y:f32)->Point{
-        if x < 0.0 || y < 0.0{
-            panic!(format!("Point needs to be positive in both dimensions.\n current x: {}\n current y: {}",x,y));
-        }
-        Point{x,y}
-    }
-}
 
 pub struct Grid {
     b_matrix: BMatrix,
@@ -436,9 +422,9 @@ pub fn main() -> GameResult {
     // default start at (0,0), but can change if you want
     // Note these numbers must be positive or will panic
     let origin_point = 0.1 as f32;
-    let update_method = BackendEngine::MultiThreaded(8);
+    //let update_method = BackendEngine::MultiThreaded(8);
     //let update_method = BackendEngine::Single;
-    //let update_method = BackendEngine::Rayon;
+    let update_method = BackendEngine::Rayon;
     let ref mut state = Grid::new(ctx,update_method)?
         .init_seed(init_b_matrix_vector)
         .init_offset(origin_point,origin_point);

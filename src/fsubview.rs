@@ -403,27 +403,27 @@ mod tests {
     }
 
 
-    #[test]
-    fn test_mock_safe_overrides_nested_method(){
-        SpriteBatchHandler::new.mock_safe(|image,sw_horizontal_sections, sw_vertical_sections|{
-            let mut spritebatch = spritebatch::SpriteBatch::new(image);
-            let mut handle_list = Vec::new();
-            let sprite_idx = spritebatch.add(new_cell(INVALID_X,INVALID_Y));
-            handle_list.push(sprite_idx);
-            MockResult::Return(SpriteBatchHandler{
-                spritebatch,
-                handle_list,
-                sw_horizontal_sections,
-                sw_vertical_sections
-            })
-        });
+    //#[test]
+    //fn test_mock_safe_overrides_nested_method(){
+        //SpriteBatchHandler::new.mock_safe(|image,sw_horizontal_sections, sw_vertical_sections|{
+            //let mut spritebatch = spritebatch::SpriteBatch::new(image);
+            //let mut handle_list = Vec::new();
+            //let sprite_idx = spritebatch.add(new_cell(INVALID_X,INVALID_Y));
+            //handle_list.push(sprite_idx);
+            //MockResult::Return(SpriteBatchHandler{
+                //spritebatch,
+                //handle_list,
+                //sw_horizontal_sections,
+                //sw_vertical_sections
+            //})
+        //});
 
-        let mut globals = setup().unwrap();
-        let black_image = Image::solid(&mut globals.ctx,CELL_SIZE as u16,BLACK!()).unwrap();
-        let dummy = 125;
-        let sprite_handler = SpriteBatchHandler::new(black_image,dummy,dummy);
-        assert_eq!(sprite_handler.handle_list.len(),1);
-    }
+        //let mut globals = setup().unwrap();
+        //let black_image = Image::solid(&mut globals.ctx,CELL_SIZE as u16,BLACK!()).unwrap();
+        //let dummy = 125;
+        //let sprite_handler = SpriteBatchHandler::new(black_image,dummy,dummy);
+        //assert_eq!(sprite_handler.handle_list.len(),1);
+    //}
 
     #[test]
     #[ignore]
