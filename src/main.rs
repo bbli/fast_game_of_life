@@ -1,6 +1,7 @@
 #![cfg_attr(test, feature(proc_macro_hygiene))]
 #![allow(non_snake_case)]
 #![warn(clippy::all)]
+#![feature(sync)]
 //! The simplest possible example that does something.
 
 use ggez::error::GameError;
@@ -17,6 +18,7 @@ use std::ops::{Deref, DerefMut};
 use std::time::{SystemTime, UNIX_EPOCH};
 //use threadpool::ThreadPool;
 use scoped_threadpool::Pool;
+//use tokio::sync::Semaphore;
 
 mod b_matrix_vector;
 use b_matrix_vector::*;
@@ -220,8 +222,8 @@ impl DerefMut for RegionPool {
 
 struct BMatrix {
     vec: BMatrixVector,
-    update_method: BackendEngine,
-    region_pool: RegionPool,
+    main_worker: MainWorker,
+    status: WorkFlag
 }
 
 // For array indexing by fsubview
@@ -240,35 +242,105 @@ impl DerefMut for BMatrix {
 
 impl BMatrix {
     fn new(update_method: BackendEngine) -> Self {
-        use BackendEngine::*;
         let vec = BMatrixVector::default();
+        let main_worker = MainWorker::new(update_method);
+        let status = WorkFlag::Done;
+        BMatrix {
+            vec,
+            main_worker,
+            status
+        }
+    }
+    //TODO: new_results should only be initialized once ->
+    //we will do lazy deletes on it
+    fn update_backend_main(&mut self){
+        // May need reader write lock to satisfy rust's borrow rules
+        self.status = self.main_worker.get_new_status();
+        if let WorkFlag::Done = self.status {
+            // no need to lock since MainWorker can't modify
+            // until we call signal anyways
+            self.vec = self.main_worker.get_new_results();
+            self.status = WorkFlag::InProgress;
+            self.main_worker.signal();
+        }
+    }
+}
+
+struct MainWorker{
+    new_results: BMatrixVector,
+    region_pool: RegionPool,
+    update_method: BackendEngine,
+    c: Semaphore,
+    status: WorkFlag
+}
+
+
+
+impl MainWorker{
+    fn new(update_method: BackendEngine)->Self{
+        use BackendEngine::*;
+        let new_results = BMatrixVector::default();
+        let c = Semaphore::new(0);
         // NOTE: using update match ergonomics
         let region_pool = match &update_method {
             Single | Rayon | Skip => RegionPool::new(1),
             MultiThreaded(x) => RegionPool::new(*x),
         };
-        BMatrix {
-            vec,
-            update_method,
+        let status = WorkFlag::Done;
+        MainWorker{
+            new_results,
             region_pool,
+            update_method,
+            c,
+            status
         }
     }
-    fn updateBackend(&mut self) {
+
+    fn get_new_results(&self) -> BMatrixVector{
+        BMatrixVector(self.new_results.clone())
+    }
+    fn get_new_status(&self) -> WorkFlag{
+        self.status
+    }
+
+    fn signal(&self){
+        self.c.add_permits(1);
+    }
+    fn do_work(&mut self){
+        loop{
+            // aka wait
+            let permit = self.c.acquire();
+
+            self.backendMethodDispatch();
+            self.
+
+            // since we don't want a scoped lock
+            permit.forget()
+        }
+    }
+
+    fn backendMethodDispatch(&mut self) {
         use BackendEngine::*;
         match &self.update_method {
             Single => {
-                self.vec = self.vec.next_b_matrix();
+                self.new_results = self.new_results.next_b_matrix();
             }
             Rayon => {
-                self.vec = self.next_b_matrix_rayon();
+                self.new_results = self.new_results.next_b_matrix_rayon();
             }
             MultiThreaded(_worker_count) => {
                 let region_pool = &mut self.region_pool;
-                self.vec = self.vec.next_b_matrix_threadpool(region_pool);
+                self.new_results = self.new_results.next_b_matrix_threadpool(region_pool);
             }
             Skip => {}
         }
     }
+}
+
+#[derive(Copy,Clone)]
+enum WorkFlag{
+    InProgress,
+    Done
 }
 
 enum BackendEngine {
@@ -368,7 +440,7 @@ impl event::EventHandler for Grid {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         self.sys_time = Some(SystemTime::now());
 
-        self.b_matrix.updateBackend();
+        self.b_matrix.update_backend_main();
 
         //self.update_offset(ctx);
         self.f_user_offset.update(ctx);

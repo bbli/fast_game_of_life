@@ -48,6 +48,8 @@ mocktopus="*"
 rayon="*"
 #threadpool="*"
 scoped_threadpool="*"
+#tokio="*"
+semaphore="*"
 
 #[target.x86_64-unknown-linux-gnu]
 #rustflags = [

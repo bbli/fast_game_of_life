@@ -6,7 +6,7 @@ use std::ops::{Deref, DerefMut};
 use mocktopus::macros::*;
 
 // has to be on heap otherwise stack overflow
-pub struct BMatrixVector(Vec<bool>);
+pub struct BMatrixVector(pub Vec<bool>);
 //unsafe impl Send for *const BMatrixVector{}
 
 // NOTE: For array indexing
