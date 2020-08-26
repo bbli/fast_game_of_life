@@ -10,7 +10,7 @@ use ggez::input::keyboard;
 use ggez::{conf, event, graphics};
 use ggez::{Context, GameResult};
 
-//use std::{thread,time};
+use std::{thread,time};
 use std::cmp::Ordering;
 use std::mem;
 use std::ops::{Deref, DerefMut};
@@ -378,6 +378,10 @@ impl event::EventHandler for Grid {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
+        //we should sleep as otherwise we spend too much time redrawing
+        let time = time::Duration::from_millis(10);
+        thread::sleep(time);
+
         graphics::clear(ctx, GREY!());
         self.f_subview.drawView(ctx)?;
         graphics::present(ctx)?;
