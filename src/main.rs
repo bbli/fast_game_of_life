@@ -12,6 +12,8 @@ use ggez::{conf, event, graphics};
 use ggez::{Context, GameResult};
 
 use std::{thread,time};
+use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::cmp::Ordering;
 use std::mem;
 use std::ops::{Deref, DerefMut};
@@ -19,6 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 //use threadpool::ThreadPool;
 use scoped_threadpool::Pool;
 //use tokio::sync::Semaphore;
+use semaphore::Semaphore;
 
 mod b_matrix_vector;
 use b_matrix_vector::*;
@@ -220,10 +223,18 @@ impl DerefMut for RegionPool {
 //work_region_list
 //}
 
+struct MainWorkerHandle(JoinHandle<()>);
+impl MainWorkerHandle{
+    fn signal(&self){
+        self.0.thread().unpark();
+    }
+}
+
 struct BMatrix {
     vec: BMatrixVector,
-    main_worker: MainWorker,
-    status: WorkFlag
+    new_vec: Arc<BMatrixVector>,
+    main_worker_thread: MainWorkerHandle,
+    status: Arc<WorkFlag>,
 }
 
 // For array indexing by fsubview
@@ -243,52 +254,55 @@ impl DerefMut for BMatrix {
 impl BMatrix {
     fn new(update_method: BackendEngine) -> Self {
         let vec = BMatrixVector::default();
-        let main_worker = MainWorker::new(update_method);
-        let status = WorkFlag::Done;
+        // Spin up new thread and have it start working immediately
+        let status = Arc::new(WorkFlag::Done);
+        let status2 = status.clone();
+        // just feed in a dummy boolean
+        let main_worker_thread = thread::spawn(
+            move ||{
+                let main_worker = MainWorker::new(update_method,status2);
+                main_worker.do_work();
+            });
         BMatrix {
             vec,
-            main_worker,
-            status
+            main_worker_thread: MainWorkerHandle(main_worker_thread),
+            status,
         }
     }
-    //TODO: new_results should only be initialized once ->
+    //TODO: new_vec should only be initialized once ->
     //we will do lazy deletes on it
     fn update_backend_main(&mut self){
-        // May need reader write lock to satisfy rust's borrow rules
-        self.status = self.main_worker.get_new_status();
-        if let WorkFlag::Done = self.status {
+        if let WorkFlag::Done = *self.status {
             // no need to lock since MainWorker can't modify
             // until we call signal anyways
             self.vec = self.main_worker.get_new_results();
-            self.status = WorkFlag::InProgress;
-            self.main_worker.signal();
+            *self.status = WorkFlag::InProgress;
+            // aka signal
+            self.main_worker_thread.signal();
         }
     }
 }
 
 struct MainWorker{
-    new_results: BMatrixVector,
+    new_vec: BMatrixVector,
     region_pool: RegionPool,
     update_method: BackendEngine,
-    c: Semaphore,
-    status: WorkFlag
+    status: Arc<WorkFlag>
 }
 
 
 
 impl MainWorker{
-    fn new(update_method: BackendEngine)->Self{
+    fn new(update_method: BackendEngine, status: Arc<WorkFlag>)->Self{
         use BackendEngine::*;
-        let new_results = BMatrixVector::default();
-        let c = Semaphore::new(0);
-        // NOTE: using update match ergonomics
+        let new_vec = BMatrixVector::default();
+        // NOTE: using new match ergonomics
         let region_pool = match &update_method {
             Single | Rayon | Skip => RegionPool::new(1),
             MultiThreaded(x) => RegionPool::new(*x),
         };
-        let status = WorkFlag::Done;
         MainWorker{
-            new_results,
+            new_vec,
             region_pool,
             update_method,
             c,
@@ -297,25 +311,21 @@ impl MainWorker{
     }
 
     fn get_new_results(&self) -> BMatrixVector{
-        BMatrixVector(self.new_results.clone())
+        //BMatrixVector(self.new_vec.clone())
+        mem::swap(main.vec,main_worker.new_vec)
     }
-    fn get_new_status(&self) -> WorkFlag{
-        self.status
-    }
+    //fn get_new_status(&self) -> WorkFlag{
+        //self.status
+    //}
 
-    fn signal(&self){
-        self.c.add_permits(1);
+    fn wait(&self){
+        thread::park();
     }
     fn do_work(&mut self){
         loop{
-            // aka wait
-            let permit = self.c.acquire();
-
+            self.wait();
             self.backendMethodDispatch();
-            self.
-
-            // since we don't want a scoped lock
-            permit.forget()
+            *self.status = WorkFlag::Done;
         }
     }
 
@@ -323,14 +333,14 @@ impl MainWorker{
         use BackendEngine::*;
         match &self.update_method {
             Single => {
-                self.new_results = self.new_results.next_b_matrix();
+                self.new_vec = self.new_vec.next_b_matrix();
             }
             Rayon => {
-                self.new_results = self.new_results.next_b_matrix_rayon();
+                self.new_vec = self.new_vec.next_b_matrix_rayon();
             }
             MultiThreaded(_worker_count) => {
                 let region_pool = &mut self.region_pool;
-                self.new_results = self.new_results.next_b_matrix_threadpool(region_pool);
+                self.new_vec = self.new_vec.next_b_matrix_threadpool(region_pool);
             }
             Skip => {}
         }
