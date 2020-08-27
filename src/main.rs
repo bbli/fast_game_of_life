@@ -231,7 +231,7 @@ impl MainWorkerHandle{
 
 struct BMatrix {
     vec: BMatrixVector,
-    new_vec: BMatrixVector,
+    new_sync_vec: ArcMut<BMatrixVector>,
     main_worker_thread: MainWorkerHandle,
     status: ArcMut<WorkFlag>,
 }
@@ -253,7 +253,9 @@ impl DerefMut for BMatrix {
 impl BMatrix {
     fn new(update_method: BackendEngine) -> Self {
         let vec = BMatrixVector::default();
-        let new_vec = BMatrixVector::default();
+        let new_sync_vec = ArcMut::new(BMatrixVector::default());
+        let new_sync_vec2 = new_sync_vec.clone();
+
         let status = ArcMut::new(WorkFlag::Done);
         //let status = Arc::new(Mutex::new(WorkFlag::Done));
         let status2 = status.clone();
@@ -261,19 +263,19 @@ impl BMatrix {
         // Spin up new thread and have it start working immediately
         let main_worker_thread = thread::spawn(
             move ||{
-                let mut main_worker = MainWorker::new(update_method,status2);
+                let main_worker = MainWorker::new(update_method,status2,new_sync_vec2);
                 main_worker.sync_worker_do_work();
             });
         BMatrix {
             vec,
-            new_vec,
+            new_sync_vec,
             main_worker_thread: MainWorkerHandle(main_worker_thread),
             status,
         }
     }
     fn update_vector(&mut self){
         // utilizing low level nature of swap function to do shallow swap
-        mem::swap(&mut self.vec,&mut self.new_vec);
+        mem::swap(&mut self.vec,&mut self.new_sync_vec);
     }
     fn sync_main_update_backend(&mut self){
         if let WorkFlag::Done = self.status.get() {
@@ -288,12 +290,6 @@ impl BMatrix {
     }
 }
 
-struct MainWorker{
-    new_vec: BMatrixVector,
-    region_pool: RegionPool,
-    update_method: BackendEngine,
-    status: ArcMut<WorkFlag>
-}
 
 struct ArcMut<T>(Arc<Mutex<T>>);
 impl<T:Clone> ArcMut<T>{
@@ -306,15 +302,20 @@ impl<T:Clone> ArcMut<T>{
     fn get(&self) -> T{
         self.lock().unwrap().deref().clone()
     }
+    fn get_mut(&mut self) -> &mut T{
+        self.lock().unwrap().deref_mut()
+    }
 }
 
 impl<T> Clone for ArcMut<T>{
     fn clone(&self) -> ArcMut<T>{
+        // need to explictly call deref in here 
+        // else will be recursive definition
         ArcMut(self.deref().clone())
     }
 }
 
-// for Arc operations
+// for Arc operations just in case I need more than clone
 impl<T> Deref for ArcMut<T> {
     type Target = Arc<Mutex<T>>;
     fn deref(&self) -> &Self::Target {
@@ -330,17 +331,22 @@ impl<T> DerefMut for ArcMut<T> {
     }
 }
 
+struct MainWorker{
+    new_sync_vec: ArcMut<BMatrixVector>,
+    region_pool: RegionPool,
+    update_method: BackendEngine,
+    status: ArcMut<WorkFlag>
+}
 impl MainWorker{
-    fn new(update_method: BackendEngine, status: ArcMut<WorkFlag>)->Self{
+    fn new(update_method: BackendEngine, status: ArcMut<WorkFlag>, new_sync_vec: ArcMut<BMatrixVector>)->Self{
         use BackendEngine::*;
-        let new_vec = BMatrixVector::default();
         // NOTE: using new match ergonomics
         let region_pool = match &update_method {
             Single | Rayon | Skip => RegionPool::new(1),
             MultiThreaded(x) => RegionPool::new(*x),
         };
         MainWorker{
-            new_vec,
+            new_sync_vec,
             region_pool,
             update_method,
             status
@@ -360,24 +366,27 @@ impl MainWorker{
     fn sync_worker_do_work(&mut self){
         loop{
             self.wait();
-            self.backendMethodDispatch();
+            // so I can temporarily bypass arc + mutex restrictions
+            // for multi-threading purposes
+            let new_vec_ref = self.new_sync_vec.get_mut();
+            self.backendMethodDispatch(new_vec_ref);
             //*self.status = WorkFlag::Done;
             self.status.set(WorkFlag::Done);
         }
     }
 
-    fn backendMethodDispatch(&mut self) {
+    fn backendMethodDispatch(&mut self,new_vec: &mut BMatrixVector) {
         use BackendEngine::*;
         match &self.update_method {
             Single => {
-                self.new_vec = self.new_vec.next_b_matrix();
+                new_vec = new_vec.next_b_matrix();
             }
             Rayon => {
-                self.new_vec = self.new_vec.next_b_matrix_rayon();
+                new_vec = new_vec.next_b_matrix_rayon();
             }
             MultiThreaded(_worker_count) => {
                 let region_pool = &mut self.region_pool;
-                self.new_vec = self.new_vec.next_b_matrix_threadpool(region_pool);
+                new_vec = self.new_vec.next_b_matrix_threadpool(region_pool);
             }
             Skip => {}
         }

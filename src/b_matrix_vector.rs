@@ -5,6 +5,8 @@ use std::ops::{Deref, DerefMut};
 #[cfg(test)]
 use mocktopus::macros::*;
 
+// This is nesscary for WorkFlag
+#[derive(Clone)]
 // has to be on heap otherwise stack overflow
 pub struct BMatrixVector(pub Vec<bool>);
 //unsafe impl Send for *const BMatrixVector{}
