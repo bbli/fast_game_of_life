@@ -253,16 +253,16 @@ impl DerefMut for BMatrix {
 impl BMatrix {
     fn new(update_method: BackendEngine) -> Self {
         let vec = BMatrixVector::default();
-        // Spin up new thread and have it start working immediately
         let new_vec = BMatrixVector::default();
         let status = ArcMut::new(WorkFlag::Done);
         //let status = Arc::new(Mutex::new(WorkFlag::Done));
         let status2 = status.clone();
 
+        // Spin up new thread and have it start working immediately
         let main_worker_thread = thread::spawn(
             move ||{
                 let mut main_worker = MainWorker::new(update_method,status2);
-                main_worker.do_work();
+                main_worker.sync_worker_do_work();
             });
         BMatrix {
             vec,
@@ -272,9 +272,10 @@ impl BMatrix {
         }
     }
     fn update_vector(&mut self){
+        // utilizing low level nature of swap function to do shallow swap
         mem::swap(&mut self.vec,&mut self.new_vec);
     }
-    fn update_backend_main(&mut self){
+    fn sync_main_update_backend(&mut self){
         if let WorkFlag::Done = self.status.get() {
             // no need to lock since MainWorker can't modify
             // until we call signal anyways
@@ -356,7 +357,7 @@ impl MainWorker{
     fn wait(&self){
         thread::park();
     }
-    fn do_work(&mut self){
+    fn sync_worker_do_work(&mut self){
         loop{
             self.wait();
             self.backendMethodDispatch();
@@ -486,7 +487,7 @@ impl event::EventHandler for Grid {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
         self.sys_time = Some(SystemTime::now());
 
-        self.b_matrix.update_backend_main();
+        self.b_matrix.sync_main_update_backend();
 
         //self.update_offset(ctx);
         self.f_user_offset.update(ctx);
