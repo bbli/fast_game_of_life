@@ -1,8 +1,7 @@
 #![cfg_attr(test, feature(proc_macro_hygiene))]
 #![allow(non_snake_case)]
 #![warn(clippy::all)]
-#![feature(sync)]
-//! The simplest possible example that does something.
+//#![feature(sync)]
 
 use ggez::error::GameError;
 use ggez::event::KeyCode;
@@ -12,7 +11,7 @@ use ggez::{conf, event, graphics};
 use ggez::{Context, GameResult};
 
 use std::{thread,time};
-use std::sync::Arc;
+use std::sync::{Arc,Mutex};
 use std::thread::JoinHandle;
 use std::cmp::Ordering;
 use std::mem;
@@ -21,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 //use threadpool::ThreadPool;
 use scoped_threadpool::Pool;
 //use tokio::sync::Semaphore;
-use semaphore::Semaphore;
+//use semaphore::Semaphore;
 
 mod b_matrix_vector;
 use b_matrix_vector::*;
@@ -232,9 +231,9 @@ impl MainWorkerHandle{
 
 struct BMatrix {
     vec: BMatrixVector,
-    new_vec: Arc<BMatrixVector>,
+    new_vec: BMatrixVector,
     main_worker_thread: MainWorkerHandle,
-    status: Arc<WorkFlag>,
+    status: ArcMut<WorkFlag>,
 }
 
 // For array indexing by fsubview
@@ -255,28 +254,33 @@ impl BMatrix {
     fn new(update_method: BackendEngine) -> Self {
         let vec = BMatrixVector::default();
         // Spin up new thread and have it start working immediately
-        let status = Arc::new(WorkFlag::Done);
+        let new_vec = BMatrixVector::default();
+        let status = ArcMut::new(WorkFlag::Done);
+        //let status = Arc::new(Mutex::new(WorkFlag::Done));
         let status2 = status.clone();
-        // just feed in a dummy boolean
+
         let main_worker_thread = thread::spawn(
             move ||{
-                let main_worker = MainWorker::new(update_method,status2);
+                let mut main_worker = MainWorker::new(update_method,status2);
                 main_worker.do_work();
             });
         BMatrix {
             vec,
+            new_vec,
             main_worker_thread: MainWorkerHandle(main_worker_thread),
             status,
         }
     }
-    //TODO: new_vec should only be initialized once ->
-    //we will do lazy deletes on it
+    fn update_vector(&mut self){
+        mem::swap(&mut self.vec,&mut self.new_vec);
+    }
     fn update_backend_main(&mut self){
-        if let WorkFlag::Done = *self.status {
+        if let WorkFlag::Done = self.status.get() {
             // no need to lock since MainWorker can't modify
             // until we call signal anyways
-            self.vec = self.main_worker.get_new_results();
-            *self.status = WorkFlag::InProgress;
+            self.update_vector();
+            //*self.status = WorkFlag::InProgress;
+            self.status.set(WorkFlag::InProgress);
             // aka signal
             self.main_worker_thread.signal();
         }
@@ -287,13 +291,46 @@ struct MainWorker{
     new_vec: BMatrixVector,
     region_pool: RegionPool,
     update_method: BackendEngine,
-    status: Arc<WorkFlag>
+    status: ArcMut<WorkFlag>
 }
 
+struct ArcMut<T>(Arc<Mutex<T>>);
+impl<T:Clone> ArcMut<T>{
+    fn new(value: T)->Self{
+        ArcMut(Arc::new(Mutex::new(value)))
+    }
+    fn set(&mut self, value : T){
+        *self.lock().unwrap().deref_mut() = value;
+    }
+    fn get(&self) -> T{
+        self.lock().unwrap().deref().clone()
+    }
+}
 
+impl<T> Clone for ArcMut<T>{
+    fn clone(&self) -> ArcMut<T>{
+        ArcMut(self.deref().clone())
+    }
+}
+
+// for Arc operations
+impl<T> Deref for ArcMut<T> {
+    type Target = Arc<Mutex<T>>;
+    fn deref(&self) -> &Self::Target {
+        //&self.0.lock().unwrap().deref()
+        &self.0
+    }
+}
+
+impl<T> DerefMut for ArcMut<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        //self.0.lock().unwrap().deref_mut()
+        &mut self.0
+    }
+}
 
 impl MainWorker{
-    fn new(update_method: BackendEngine, status: Arc<WorkFlag>)->Self{
+    fn new(update_method: BackendEngine, status: ArcMut<WorkFlag>)->Self{
         use BackendEngine::*;
         let new_vec = BMatrixVector::default();
         // NOTE: using new match ergonomics
@@ -305,15 +342,13 @@ impl MainWorker{
             new_vec,
             region_pool,
             update_method,
-            c,
             status
         }
     }
 
-    fn get_new_results(&self) -> BMatrixVector{
-        //BMatrixVector(self.new_vec.clone())
-        mem::swap(main.vec,main_worker.new_vec)
-    }
+    //fn get_new_results(&self) -> BMatrixVector{
+        ////BMatrixVector(self.new_vec.clone())
+    //}
     //fn get_new_status(&self) -> WorkFlag{
         //self.status
     //}
@@ -325,7 +360,8 @@ impl MainWorker{
         loop{
             self.wait();
             self.backendMethodDispatch();
-            *self.status = WorkFlag::Done;
+            //*self.status = WorkFlag::Done;
+            self.status.set(WorkFlag::Done);
         }
     }
 
