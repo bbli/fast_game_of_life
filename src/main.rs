@@ -234,7 +234,6 @@ struct BMatrix {
     new_vec: MyArcMut<BMatrixVector>,
     main_worker_thread: MainWorkerHandle,
     status: MyArcMut<WorkFlag>,
-    sys_time: SystemTime,
 }
 
 //impl Deref for BMatrix {
@@ -273,7 +272,6 @@ impl BMatrix {
             new_vec,
             main_worker_thread: MainWorkerHandle(main_worker_thread),
             status,
-            sys_time: SystemTime::now()
         }
     }
     fn update_vector(&mut self){
@@ -286,14 +284,6 @@ impl BMatrix {
         mem::swap(vec_raw,new_vec_raw);
     }
 
-    fn print_time_lapse(&mut self){
-        let time_lapse = self.sys_time
-            .elapsed()
-            .expect("System clock did something funny");
-        println!("Time elapsed: {}ms", time_lapse.as_millis());
-        // update for next round
-        self.sys_time = SystemTime::now();
-    }
     fn sync_main_update_backend(&mut self){
         if let WorkFlag::Done = self.status.get() {
             // no need to lock since MainWorker can't modify
@@ -301,13 +291,18 @@ impl BMatrix {
             self.update_vector();
 
             self.status.set(WorkFlag::InProgress);
-            self.print_time_lapse();
             
             self.main_worker_thread.signal();
         }
     }
 }
 
+fn print_time_lapse(sys_time: SystemTime){
+    let time_lapse = sys_time
+        .elapsed()
+        .expect("System clock did something funny");
+    println!("Time elapsed: {}ms", time_lapse.as_millis());
+}
 
 struct MyArcMut<T>(Arc<Mutex<T>>);
 impl<T> MyArcMut<T>{
@@ -412,8 +407,11 @@ impl MainWorker{
     fn sync_worker_do_work(&mut self){
         loop{
             self.wait();
+
+            let sys_time = SystemTime::now();
             self.backendMethodDispatch();
-            //*self.status = WorkFlag::Done;
+            print_time_lapse(sys_time);
+
             self.status.set(WorkFlag::Done);
         }
     }
