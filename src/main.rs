@@ -234,6 +234,7 @@ struct BMatrix {
     new_vec: MyArcMut<BMatrixVector>,
     main_worker_thread: MainWorkerHandle,
     status: MyArcMut<WorkFlag>,
+    sys_time: SystemTime,
 }
 
 //impl Deref for BMatrix {
@@ -272,6 +273,7 @@ impl BMatrix {
             new_vec,
             main_worker_thread: MainWorkerHandle(main_worker_thread),
             status,
+            sys_time: SystemTime::now()
         }
     }
     fn update_vector(&mut self){
@@ -283,14 +285,24 @@ impl BMatrix {
         let vec_raw: &mut BMatrixVector = vec_lock.deref_mut();
         mem::swap(vec_raw,new_vec_raw);
     }
+
+    fn print_time_lapse(&mut self){
+        let time_lapse = self.sys_time
+            .elapsed()
+            .expect("System clock did something funny");
+        println!("Time elapsed: {}ms", time_lapse.as_millis());
+        // update for next round
+        self.sys_time = SystemTime::now();
+    }
     fn sync_main_update_backend(&mut self){
         if let WorkFlag::Done = self.status.get() {
             // no need to lock since MainWorker can't modify
             // until we call signal anyways
             self.update_vector();
-            //*self.status = WorkFlag::InProgress;
+
             self.status.set(WorkFlag::InProgress);
-            // aka signal
+            self.print_time_lapse();
+            
             self.main_worker_thread.signal();
         }
     }
@@ -449,7 +461,6 @@ enum BackendEngine {
 
 pub struct Grid {
     b_matrix: BMatrix,
-    sys_time: Option<SystemTime>,
     f_subview: FSubview,
     f_user_offset: OffsetState,
 }
@@ -458,13 +469,11 @@ impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
     fn new(ctx: &mut Context, update_method: BackendEngine) -> GameResult<Grid> {
         let b_matrix = BMatrix::new(update_method);
-        let sys_time = None;
         let f_subview = FSubview::new(ctx)?;
         let f_user_offset = OffsetState::default();
 
         Ok(Grid {
             b_matrix,
-            sys_time,
             f_subview,
             f_user_offset,
         })
@@ -547,7 +556,6 @@ trait MatrixView {
 
 impl event::EventHandler for Grid {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        self.sys_time = Some(SystemTime::now());
 
         self.b_matrix.sync_main_update_backend();
 
@@ -566,12 +574,6 @@ impl event::EventHandler for Grid {
         self.f_subview.drawView(ctx)?;
         graphics::present(ctx)?;
 
-        let time_lapse = self
-            .sys_time
-            .unwrap()
-            .elapsed()
-            .expect("System clock did something funny");
-        println!("Time elapsed: {}ms", time_lapse.as_millis());
         Ok(())
     }
 }
