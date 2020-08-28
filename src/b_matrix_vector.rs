@@ -103,6 +103,7 @@ impl BMatrixVector {
         BMatrixVector(vec)
     }
 }
+//#[mockable]
 pub mod engine{
     use super::*;
     pub fn next_b_matrix(vec: &BMatrixVector, new_vec: &mut BMatrixVector) {
@@ -128,6 +129,7 @@ pub mod engine{
             });
     }
 
+    //#[mockable]
     pub fn next_b_matrix_threadpool(vec: &BMatrixVector, new_vec: &mut BMatrixVector, region_pool: &mut RegionPool){
         // ************  MULTITHREADED THREADPOOL  ************
         // 0. allocate threadpool during Grid::new() DONE
@@ -194,21 +196,12 @@ mod tests {
     use crate::tests::*;
     #[test]
     fn test_BMatrixVector_index_on_subview() {
-        let cb = ggez::ContextBuilder::new("super_simple", "ggez").window_mode(
-            conf::WindowMode::default()
-                .resizable(true)
-                .dimensions(WINDOW_WIDTH as f32, WINDOW_HEIGHT as f32),
-        );
-        let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
-        // initialize a Grid object
-        let update_method = BackendEngine::Skip;
-        let grid = Grid::new(ctx, update_method).unwrap();
+        let b_matrix_vector = BMatrixVector::default();
         // Check that a point close to origin
-        let value = grid.b_matrix.at(1, 1).unwrap();
+        let value = b_matrix_vector.at(1, 1).unwrap();
         assert_eq!(value, false);
         // Check last point:
-        let value = grid
-            .b_matrix
+        let value = b_matrix_vector
             .at((GRID_SIZE - 1) as i32, (GRID_SIZE - 1) as i32)
             .unwrap();
         assert_eq!(value, false);
@@ -218,11 +211,9 @@ mod tests {
     #[test]
     fn test_BMatrixVector_at_outOfBounds() {
         println!("HI!!!!!!");
-        let mut globals = setup().unwrap();
-        let update_method = BackendEngine::Skip;
-        let grid = Grid::new(&mut globals.ctx, update_method).unwrap();
+        let b_matrix_vector = BMatrixVector::default();
 
-        let value = grid.b_matrix.at((2 * GRID_SIZE) as i32, 0).unwrap();
+        let value = b_matrix_vector.at((2 * GRID_SIZE) as i32, 0).unwrap();
     }
 
     #[test]
@@ -235,7 +226,8 @@ mod tests {
 
         *b_matrix_vector.at_mut(i, j).unwrap() = true;
         assert_eq!(b_matrix_vector.at(i, j).unwrap(), true);
-        let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
+        let mut next_b_matrix_vector = BMatrixVector::default();
+        engine::next_b_matrix(&b_matrix_vector,&mut next_b_matrix_vector);
 
         assert_eq!(next_b_matrix_vector.at(i, j).unwrap(), false);
     }
@@ -251,7 +243,8 @@ mod tests {
         *b_matrix_vector.at_mut(i - 1, j).unwrap() = true;
         *b_matrix_vector.at_mut(i, j - 1).unwrap() = true;
 
-        let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
+        let mut next_b_matrix_vector = BMatrixVector::default();
+        engine::next_b_matrix(&b_matrix_vector,&mut next_b_matrix_vector);
 
         assert_eq!(next_b_matrix_vector.at(i, j + 1).unwrap(), false);
         assert_eq!(next_b_matrix_vector.at(i - 1, j).unwrap(), true);
@@ -269,7 +262,8 @@ mod tests {
         *b_matrix_vector.at_mut(i - 1, j).unwrap() = true;
         *b_matrix_vector.at_mut(i, j).unwrap() = true;
 
-        let next_b_matrix_vector = b_matrix_vector.next_b_matrix();
+        let mut next_b_matrix_vector = BMatrixVector::default();
+        engine::next_b_matrix(&b_matrix_vector,&mut next_b_matrix_vector);
 
         assert_eq!(next_b_matrix_vector.at(i, j).unwrap(), true);
         assert_eq!(next_b_matrix_vector.at(i, j - 1).unwrap(), true);
@@ -286,48 +280,51 @@ mod tests {
         assert_eq!(j, new_j);
     }
 
-    #[test]
-    #[ignore]
-    fn test_next_b_matrix_threadpool_first_thread() {
-        // NOTE: B/c of closures, hard to abstract over so we will just plain out
-        // override the method we are testing -> So if implementation changes,
-        // make sure to change this too
-        BMatrixVector::next_b_matrix_threadpool.mock_safe(
-            |my_self: &BMatrixVector, region_pool: &mut RegionPool| {
-                let mut new_results = BMatrixVector::default();
-                //unlike in original code, we are not going to move region_iterator
-                let mut region_iterator = region_pool.create_iter_mut(&mut new_results);
-                region_pool.scoped(|scope| {
-                    if let Some((first_slice, first_offset)) = region_iterator.next() {
-                        scope.execute(move || {
-                            for (rel_i, cell_ptr) in first_slice.iter_mut().enumerate() {
-                                let idx = rel_i + first_offset as usize;
-                                let (i, j) = get_location_from_idx(idx);
-                                let count = life::get_count(i, j, &my_self);
-                                let state = my_self.at(i, j).unwrap();
-                                *cell_ptr = life::new_cell_value(state, count, &my_self);
-                            }
-                        })
-                    } else {
-                        panic!("iterator should still have elements");
-                    }
-                });
+    // This test can't work anymore as mocktopus mocks only work on the main thread
+    //#[test]
+    //#[ignore]
+    //fn test_next_b_matrix_threadpool_first_thread() {
+        //// NOTE: B/c of closures, hard to abstract over so we will just plain out
+        //// override the method we are testing -> So if implementation changes,
+        //// make sure to change this too
+        //engine::next_b_matrix_threadpool.mock_safe(
+            //|vec: &BMatrixVector, new_vec: &mut BMatrixVector, region_pool: &mut RegionPool| {
+                ////unlike in original code, we are not going to move region_iterator
+                //let mut region_iterator = region_pool.create_iter_mut(new_vec);
+                //region_pool.scoped(|scope| {
+                    //if let Some((first_slice, first_offset)) = region_iterator.next() {
+                        ////println!("Num elements")
+                        //panic!("got here");
+                        //scope.execute(move || {
+                            //for (rel_i, cell_ptr) in first_slice.iter_mut().enumerate() {
+                                //let idx = rel_i + first_offset as usize;
+                                //let (i, j) = get_location_from_idx(idx);
+                                //let count = life::get_count(i, j, &vec);
+                                //let state = vec.at(i, j).unwrap();
+                                //*cell_ptr = life::new_cell_value(state, count,vec);
+                            //}
+                        //});
+                        //scope.join_all();
+                    //} else {
+                        //panic!("iterator should still have elements");
+                    //}
+                //});
 
-                MockResult::Return(new_results)
-            },
-        );
+                //MockResult::Return(())
+            //},
+        //);
 
-        let mut globals = setup().unwrap();
-        let init_b_matrix_vector = patterns::PatternBuilder::new()
-            .make_random((0, 0), GRID_SIZE, GRID_SIZE)
-            .build();
-        let update_method = BackendEngine::MultiThreaded(100);
-        //let update_method = BackendEngine::Rayon;
-        let mut grid = Grid::new(&mut globals.ctx, update_method)
-            .unwrap()
-            .init_seed(init_b_matrix_vector);
+        //let mut globals = setup().unwrap();
+        //let init_b_matrix_vector = patterns::PatternBuilder::new()
+            //.make_random((0, 0), GRID_SIZE, GRID_SIZE)
+            //.build();
+        //let update_method = BackendEngine::MultiThreaded(500);
+        ////let update_method = BackendEngine::Rayon;
+        //let mut grid = Grid::new(&mut globals.ctx, update_method)
+            //.unwrap()
+            //.init_seed(init_b_matrix_vector);
 
-        // should only update the first section of rows
-        event::run(&mut globals.ctx, &mut globals.event_loop, &mut grid);
-    }
+        //// should only update the first section of rows
+        //event::run(&mut globals.ctx, &mut globals.event_loop, &mut grid);
+    //}
 }

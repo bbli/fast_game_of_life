@@ -261,7 +261,7 @@ impl BMatrix {
         //let status = Arc::new(Mutex::new(WorkFlag::Done));
         let status2 = status.clone();
 
-        // Spin up new thread and have it start working immediately
+        // Spin up new thread and have it sleep until event loop starts and BMatrix calls signal
         let main_worker_thread = thread::spawn(
             move ||{
                 let mut main_worker = MainWorker::new(update_method,status2,new_vec2,vec2);

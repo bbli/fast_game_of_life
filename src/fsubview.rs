@@ -462,7 +462,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_change_to_white() {
-        Grid::update_view.mock_safe(|my_self: &mut Grid, ctx: &mut Context| {
+        Grid::sync_update_view.mock_safe(|my_self: &mut Grid, ctx: &mut Context| {
             // change one of the blocks to white now ->
             // Assumes SpriteBatchHandler::new sets everything to invalid at first
             my_self.f_subview.change_to_white(20, 20);
@@ -478,7 +478,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_change_to_black() {
-        Grid::update_view.mock_safe(|my_self: &mut Grid, ctx: &mut Context| {
+        Grid::sync_update_view.mock_safe(|my_self: &mut Grid, ctx: &mut Context| {
             // change one of the blocks to black now ->
             // Assumes SpriteBatchHandler::new sets everything to invalid at first
             my_self.f_subview.change_to_black(20, 20);
