@@ -11,7 +11,7 @@ use ggez::{conf, event, graphics};
 use ggez::{Context, GameResult};
 
 use std::{thread,time};
-use std::sync::{Arc,Mutex};
+use std::sync::{Arc,Mutex,MutexGuard,RwLock,RwLockWriteGuard,RwLockReadGuard};
 use std::thread::JoinHandle;
 use std::cmp::Ordering;
 use std::mem;
@@ -47,7 +47,7 @@ const EPSILON: f32 = 1e-2f32;
 //const SW_HORIZONTAL_SECTIONS:i32 = ((CELL_SIZE+CELL_GAP+WINDOW_WIDTH as f32)/(CELL_SIZE+CELL_GAP)).ceil() as i32;
 
 // ************  Backend Globals  ************
-// 1. Some code may be reliant(update_view) on this number being bigger than max(NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT), which is an approximation to worst case scenario, whose function is also provided below
+// 1. Some code may be reliant(sync_update_view) on this number being bigger than max(NUM_BLOCKS_WIDTH,NUM_BLOCKS_HEIGHT), which is an approximation to worst case scenario, whose function is also provided below
 // ```
 // fn get_worst_case_num_of_blocks(side: usize) -> usize{
 //let distance_left_to_pack_on_one_side: f32 = side as f32/2.0 - CELL_SIZE as f32/2.0;
@@ -230,52 +230,58 @@ impl MainWorkerHandle{
 }
 
 struct BMatrix {
-    vec: BMatrixVector,
-    new_sync_vec: ArcMut<BMatrixVector>,
+    vec: MyArcRwLock<BMatrixVector>,
+    new_vec: MyArcMut<BMatrixVector>,
     main_worker_thread: MainWorkerHandle,
-    status: ArcMut<WorkFlag>,
+    status: MyArcMut<WorkFlag>,
 }
 
-// For array indexing by fsubview
-impl Deref for BMatrix {
-    type Target = BMatrixVector;
-    fn deref(&self) -> &Self::Target {
-        &self.vec
-    }
-}
+//impl Deref for BMatrix {
+    //type Target = BMatrixVector;
+    //fn deref(&self) -> &Self::Target {
+        //&self.vec
+    //}
+//}
 
-impl DerefMut for BMatrix {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.vec
-    }
-}
+//impl DerefMut for BMatrix {
+    //fn deref_mut(&mut self) -> &mut Self::Target {
+        //&mut self.vec
+    //}
+//}
+
 
 impl BMatrix {
     fn new(update_method: BackendEngine) -> Self {
-        let vec = BMatrixVector::default();
-        let new_sync_vec = ArcMut::new(BMatrixVector::default());
-        let new_sync_vec2 = new_sync_vec.clone();
+        let vec = MyArcRwLock::new(BMatrixVector::default());
+        let vec2 = vec.clone();
+        let new_vec = MyArcMut::new(BMatrixVector::default());
+        let new_vec2 = new_vec.clone();
 
-        let status = ArcMut::new(WorkFlag::Done);
+        let status = MyArcMut::new(WorkFlag::Done);
         //let status = Arc::new(Mutex::new(WorkFlag::Done));
         let status2 = status.clone();
 
         // Spin up new thread and have it start working immediately
         let main_worker_thread = thread::spawn(
             move ||{
-                let main_worker = MainWorker::new(update_method,status2,new_sync_vec2);
+                let mut main_worker = MainWorker::new(update_method,status2,new_vec2,vec2);
                 main_worker.sync_worker_do_work();
             });
         BMatrix {
             vec,
-            new_sync_vec,
+            new_vec,
             main_worker_thread: MainWorkerHandle(main_worker_thread),
             status,
         }
     }
     fn update_vector(&mut self){
         // utilizing low level nature of swap function to do shallow swap
-        mem::swap(&mut self.vec,&mut self.new_sync_vec);
+        let mut new_vec_lock = self.new_vec.grab_lock();
+        let new_vec_raw: &mut BMatrixVector = new_vec_lock.deref_mut();
+
+        let mut vec_lock = self.vec.grab_writer_lock();
+        let vec_raw: &mut BMatrixVector = vec_lock.deref_mut();
+        mem::swap(vec_raw,new_vec_raw);
     }
     fn sync_main_update_backend(&mut self){
         if let WorkFlag::Done = self.status.get() {
@@ -291,54 +297,81 @@ impl BMatrix {
 }
 
 
-struct ArcMut<T>(Arc<Mutex<T>>);
-impl<T:Clone> ArcMut<T>{
+struct MyArcMut<T>(Arc<Mutex<T>>);
+impl<T> MyArcMut<T>{
     fn new(value: T)->Self{
-        ArcMut(Arc::new(Mutex::new(value)))
+        MyArcMut(Arc::new(Mutex::new(value)))
     }
+    // use this only if set and get are too limiting
+    fn grab_lock(&self) -> MutexGuard<T>{
+        self.0.lock().unwrap()
+    }
+}
+
+impl<T:Clone> MyArcMut<T>{
     fn set(&mut self, value : T){
-        *self.lock().unwrap().deref_mut() = value;
+        *self.0.lock().unwrap().deref_mut() = value;
     }
     fn get(&self) -> T{
-        self.lock().unwrap().deref().clone()
-    }
-    fn get_mut(&mut self) -> &mut T{
-        self.lock().unwrap().deref_mut()
+        self.0.lock().unwrap().deref().clone()
     }
 }
 
-impl<T> Clone for ArcMut<T>{
-    fn clone(&self) -> ArcMut<T>{
-        // need to explictly call deref in here 
-        // else will be recursive definition
-        ArcMut(self.deref().clone())
+impl<T> Clone for MyArcMut<T>{
+    fn clone(&self) -> MyArcMut<T>{
+        MyArcMut(self.0.clone())
     }
 }
 
-// for Arc operations just in case I need more than clone
-impl<T> Deref for ArcMut<T> {
-    type Target = Arc<Mutex<T>>;
-    fn deref(&self) -> &Self::Target {
-        //&self.0.lock().unwrap().deref()
-        &self.0
+struct MyArcRwLock<T>(Arc<RwLock<T>>);
+impl<T> MyArcRwLock<T>{
+    fn new(value: T)->Self{
+        MyArcRwLock(Arc::new(RwLock::new(value)))
+    }
+    fn grab_writer_lock(&self) -> RwLockWriteGuard<T>{
+        self.0.write().unwrap()
+    }
+    fn grab_reader_lock(&self) -> RwLockReadGuard<T>{
+        self.0.read().unwrap()
+    }
+}
+impl<T> Clone for MyArcRwLock<T>{
+    fn clone(&self) -> MyArcRwLock<T>{
+        MyArcRwLock(self.0.clone())
     }
 }
 
-impl<T> DerefMut for ArcMut<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        //self.0.lock().unwrap().deref_mut()
-        &mut self.0
-    }
-}
+// This wrapper struct is solely for strong typing purposes
+//struct MyArc<T>(MyArcMut<T>);
+//impl<T> Deref for MyArc<T> {
+    //type Target = MyArcMut<T>;
+    //fn deref(&self) -> &Self::Target {
+        ////&self.0.lock().unwrap().deref()
+        //&self.0
+    //}
+//}
+
+//impl<T> DerefMut for MyArc<T> {
+    //fn deref_mut(&mut self) -> &mut Self::Target {
+        ////self.0.lock().unwrap().deref_mut()
+        //&mut self.0
+    //}
+//}
+//impl<T:Clone> MyArc<T>{
+    //fn new(value: T)-> MyArc<T>{
+        //MyArc(MyArcMut::new(value))
+    //}
+//}
 
 struct MainWorker{
-    new_sync_vec: ArcMut<BMatrixVector>,
+    new_vec: MyArcMut<BMatrixVector>,
+    vec: MyArcRwLock<BMatrixVector>,
     region_pool: RegionPool,
     update_method: BackendEngine,
-    status: ArcMut<WorkFlag>
+    status: MyArcMut<WorkFlag>
 }
 impl MainWorker{
-    fn new(update_method: BackendEngine, status: ArcMut<WorkFlag>, new_sync_vec: ArcMut<BMatrixVector>)->Self{
+    fn new(update_method: BackendEngine, status: MyArcMut<WorkFlag>, new_vec: MyArcMut<BMatrixVector>, vec: MyArcRwLock<BMatrixVector>)->Self{
         use BackendEngine::*;
         // NOTE: using new match ergonomics
         let region_pool = match &update_method {
@@ -346,7 +379,8 @@ impl MainWorker{
             MultiThreaded(x) => RegionPool::new(*x),
         };
         MainWorker{
-            new_sync_vec,
+            new_vec,
+            vec,
             region_pool,
             update_method,
             status
@@ -366,27 +400,32 @@ impl MainWorker{
     fn sync_worker_do_work(&mut self){
         loop{
             self.wait();
-            // so I can temporarily bypass arc + mutex restrictions
-            // for multi-threading purposes
-            let new_vec_ref = self.new_sync_vec.get_mut();
-            self.backendMethodDispatch(new_vec_ref);
+            self.backendMethodDispatch();
             //*self.status = WorkFlag::Done;
             self.status.set(WorkFlag::Done);
         }
     }
 
-    fn backendMethodDispatch(&mut self,new_vec: &mut BMatrixVector) {
+    fn backendMethodDispatch(&mut self) {
         use BackendEngine::*;
+        // so I can temporarily bypass arc + mutex restrictions
+        // for multi-threading purposes
+        let mut new_vec_lock = self.new_vec.grab_lock();
+        let new_vec_raw = new_vec_lock.deref_mut();
+
+        let vec_lock = self.vec.grab_reader_lock();
+        let vec_raw = vec_lock.deref();
         match &self.update_method {
             Single => {
-                new_vec = new_vec.next_b_matrix();
+                //new_vec = new_vec.next_b_matrix();
+                engine::next_b_matrix(vec_raw,new_vec_raw);
             }
             Rayon => {
-                new_vec = new_vec.next_b_matrix_rayon();
+                engine::next_bmatrix_rayon(vec_raw,new_vec_raw);
             }
             MultiThreaded(_worker_count) => {
                 let region_pool = &mut self.region_pool;
-                new_vec = self.new_vec.next_b_matrix_threadpool(region_pool);
+                engine::next_b_matrix_threadpool(vec_raw,new_vec_raw,region_pool);
             }
             Skip => {}
         }
@@ -432,7 +471,18 @@ impl Grid {
     }
 
     fn init_seed(mut self, init_b_matrix_vector: BMatrixVector) -> Self {
-        self.b_matrix.vec = init_b_matrix_vector;
+
+        let mut new_vec_lock = self.b_matrix.new_vec.grab_lock();
+        let new_vec_raw: &mut BMatrixVector = new_vec_lock.deref_mut();
+
+        let mut vec_lock = self.b_matrix.vec.grab_writer_lock();
+        let vec_raw: &mut BMatrixVector = vec_lock.deref_mut();
+        *new_vec_raw = init_b_matrix_vector.clone();
+        *vec_raw = init_b_matrix_vector;
+
+        // Have to explicitly drop b/c self can't return until there are no borrows
+        std::mem::drop(new_vec_lock);
+        std::mem::drop(vec_lock);
         self
     }
 
@@ -447,7 +497,10 @@ impl Grid {
     }
 
     // Invariant Sliding Window Version
-    fn update_view(&mut self, ctx: &mut Context) -> GameResult {
+    fn sync_update_view(&mut self, ctx: &mut Context) -> GameResult {
+        // 0. Extracting updated b_matrix_vector
+        let vec_lock = self.b_matrix.vec.grab_reader_lock();
+        let vec_raw = vec_lock.deref();
         // 1. get bounding boxes
         let offset_point = self.f_user_offset.get_point();
         let (left_idx, right_idx) = self
@@ -464,7 +517,7 @@ impl Grid {
             for i in left_idx..right_idx + 1 {
                 let relative_i = i - left_idx;
 
-                if self.b_matrix.at(i, j)? {
+                if vec_raw.at(i, j)? {
                     //self.f_subview.change_to_white(i,j);
                     self.f_subview.addWhiteToView(relative_i, relative_j);
                 } else {
@@ -489,7 +542,7 @@ trait MatrixView {
     /// i and j are with respect to computer graphics convention
     type Item;
     fn at(&self, i: i32, j: i32) -> GameResult<Self::Item>;
-    fn at_mut<'a>(&'a mut self, i: i32, j: i32) -> GameResult<&'a mut Self::Item>;
+    fn at_mut(&mut self, i: i32, j: i32) -> GameResult<&mut Self::Item>;
 }
 
 impl event::EventHandler for Grid {
@@ -498,10 +551,9 @@ impl event::EventHandler for Grid {
 
         self.b_matrix.sync_main_update_backend();
 
-        //self.update_offset(ctx);
         self.f_user_offset.update(ctx);
-        // use updated b_matrix to update view
-        self.update_view(ctx)?;
+        // use updated b_matrix and offset to update view
+        self.sync_update_view(ctx)?;
         Ok(())
     }
 

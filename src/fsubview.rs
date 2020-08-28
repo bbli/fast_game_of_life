@@ -210,7 +210,7 @@ impl MatrixView for SpriteBatchHandler {
             Ok(self.handle_list[(j * self.sw_horizontal_sections + i) as usize])
         }
     }
-    fn at_mut<'a>(&'a mut self, i: i32, j: i32) -> GameResult<&'a mut Self::Item> {
+    fn at_mut(&mut self, i: i32, j: i32) -> GameResult<&mut Self::Item> {
         if i < 0 || j < 0 {
             Err(GameError::EventLoopError(
                 "IndexError(View Matrix.at): i and j must be nonnegative".to_string(),

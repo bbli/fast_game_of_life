@@ -5,11 +5,10 @@ use std::ops::{Deref, DerefMut};
 #[cfg(test)]
 use mocktopus::macros::*;
 
-// This is nesscary for WorkFlag
+// Since we need to copy the init_seed twice into vec & new_vec
 #[derive(Clone)]
 // has to be on heap otherwise stack overflow
 pub struct BMatrixVector(pub Vec<bool>);
-//unsafe impl Send for *const BMatrixVector{}
 
 // NOTE: For array indexing
 impl Deref for BMatrixVector {
@@ -103,64 +102,55 @@ impl BMatrixVector {
     pub fn new_for_test(vec: Vec<bool>) -> Self {
         BMatrixVector(vec)
     }
-    pub fn next_b_matrix(&self) -> BMatrixVector {
-        let mut new_results = BMatrixVector::default();
+}
+pub mod engine{
+    use super::*;
+    pub fn next_b_matrix(vec: &BMatrixVector, new_vec: &mut BMatrixVector) {
 
         for j in 0..GRID_SIZE {
             for i in 0..GRID_SIZE {
-                let count = life::get_count(i, j, &self);
-                let state = self.at(i, j).unwrap();
-                let mut cell_ptr = new_results.at_mut(i, j).unwrap();
-                *cell_ptr = life::new_cell_value(state, count, &self);
+                let count = life::get_count(i, j,vec);
+                let state = vec.at(i, j).unwrap();
+                let mut cell_ptr = new_vec.at_mut(i, j).unwrap();
+                *cell_ptr = life::new_cell_value(state, count, vec);
             }
         }
-
-        new_results
     }
-    // self has to be immutable for multi-thread reads
-    pub fn next_b_matrix_rayon(&self) -> BMatrixVector {
-        let mut new_results = BMatrixVector::default();
-
-        new_results
+    pub fn next_bmatrix_rayon(vec: &BMatrixVector, new_vec: &mut BMatrixVector){
+        new_vec
             .par_iter_mut()
             .enumerate()
             .for_each(|(idx, cell_ptr)| {
                 let (i, j) = get_location_from_idx(idx);
-                let count = life::get_count(i, j, &self);
-                let state = self.at(i, j).unwrap();
-                *cell_ptr = life::new_cell_value(state, count, &self);
+                let count = life::get_count(i, j,vec);
+                let state = vec.at(i, j).unwrap();
+                *cell_ptr = life::new_cell_value(state, count,vec);
             });
-
-        new_results
     }
 
-    //fn do_job(start_y:i32, end_y: i32, )
-    pub fn next_b_matrix_threadpool(&self, region_pool: &mut RegionPool) -> BMatrixVector {
+    pub fn next_b_matrix_threadpool(vec: &BMatrixVector, new_vec: &mut BMatrixVector, region_pool: &mut RegionPool){
         // ************  MULTITHREADED THREADPOOL  ************
-        let mut new_results = BMatrixVector::default();
         // 0. allocate threadpool during Grid::new() DONE
         // 1. code to partition grid evenly into num_of_threads(also in setup) DONE
         // 2. start up each thread -> since they have a predefined job
         // 3. join to wait
         //
         // need local variable since closures require unique acess to its borrows
-        let region_iterator = region_pool.create_iter_mut(&mut new_results);
+        let region_iterator = region_pool.create_iter_mut(new_vec);
         region_pool.scoped(|scope| {
             for (slice, iter_offset) in region_iterator {
                 scope.execute(move || {
                     for (rel_i, cell_ptr) in slice.iter_mut().enumerate() {
                         let idx = rel_i + iter_offset as usize;
                         let (i, j) = get_location_from_idx(idx);
-                        let count = life::get_count(i, j, &self);
-                        let state = self.at(i, j).unwrap();
-                        *cell_ptr = life::new_cell_value(state, count, &self);
+                        let count = life::get_count(i, j,vec);
+                        let state = vec.at(i, j).unwrap();
+                        *cell_ptr = life::new_cell_value(state, count,vec);
                     }
                 });
             }
             scope.join_all();
         });
-
-        new_results
     }
 }
 
@@ -182,7 +172,7 @@ impl MatrixView for BMatrixVector {
             ))
         }
     }
-    fn at_mut<'a>(&'a mut self, i: i32, j: i32) -> GameResult<&'a mut Self::Item> {
+    fn at_mut(&mut self, i: i32, j: i32) -> GameResult<&mut Self::Item> {
         if i >= 0 && j >= 0 && i < GRID_SIZE && j < GRID_SIZE {
             Ok(&mut self.0[(j * GRID_SIZE + i) as usize])
         } else if i >= GRID_SIZE || j >= GRID_SIZE {
