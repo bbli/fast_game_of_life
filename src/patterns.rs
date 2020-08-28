@@ -1,4 +1,5 @@
 use super::*;
+use std::ops::{Deref, DerefMut};
 // no need since we "inherit" parent's uses
 //use super::b_matrix_vector::BMatrixVector;
 use rand::prelude::*;
