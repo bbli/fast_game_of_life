@@ -5,12 +5,13 @@
 ## Description
 ![cgol](cgol.gif)
 * Conway's Game of Life implemented using [ggez](https://github.com/ggez/ggez)
-* Default runs on 2000 by 2000 grid(modfiy `GRID_SIZE` global variable to change)
-* Can use arrow keys to move around the grid, as 2000 cells probably will not fit on your computer screen(modify `WINDOW_WIDTH` and `WINDOW_HEIGHT` globals to change to screen of your monitor)
-* Some predefined patterns(look in `src/patterns.rs`) for more details
+* Default runs on 2000 by 2000 cell grid(modfiy `GRID_SIZE` global variable to change number of cells, and `WINDOW_WIDTH` and `WINDOW_HEIGHT` globals to change size of view)
+    * Number of cells is probably bigger than your computer screen. For reference, on my 1920 wide laptop, it will fit about 82 cells across
+    * ... which is why you can use arrow keys to move around the grid!
+    * Furtheremore, movement is asynchronous, so you can fly around the screen :).
+* Some predefined patterns(look in `src/patterns.rs` for more details)
 * Can choose run of number of threads of your choosing(`Backend::MultiThreaded(num_threads)`) or just have program figure it out by using the [rayon](https://github.com/rayon-rs/rayon) data parallelism library(`Backend::Rayon`)
 
-* See example below for more details
 
 ```
 pub fn main() -> GameResult {
@@ -50,6 +51,3 @@ pub fn main() -> GameResult {
     event::run(ctx, event_loop, state)
 }
 ```
-
-## Future TODO
-* refactor with traits to get rid of deref anti-pattern
