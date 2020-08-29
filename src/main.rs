@@ -93,7 +93,7 @@ pub struct Grid {
 //#[mockable]
 impl Grid {
     // returns a Result object rather than Self b/c creating the image may fail
-    fn new(ctx: &mut Context, update_method: BackendEngine) -> GameResult<Grid> {
+    fn new(ctx: &mut Context, update_method: Backend) -> GameResult<Grid> {
         let b_matrix = BMatrix::new(update_method);
         let f_subview = FSubview::new(ctx)?;
         let f_user_offset = OffsetState::default();
@@ -232,9 +232,9 @@ pub fn main() -> GameResult {
     // default start at (0,0), but can change if you want
     // Note these numbers must be positive or will panic
     let origin_point = 0.1 as f32;
-    //let update_method = BackendEngine::MultiThreaded(8);
-    //let update_method = BackendEngine::Single;
-    let update_method = BackendEngine::Rayon;
+    //let update_method = Backend::MultiThreaded(8);
+    //let update_method = Backend::Single;
+    let update_method = Backend::Rayon;
     let ref mut state = Grid::new(ctx, update_method)?
         .init_seed(init_b_matrix_vector)
         .init_offset(origin_point, origin_point);
@@ -300,7 +300,7 @@ mod tests {
 
         let mut globals = setup().unwrap();
 
-        let update_method = BackendEngine::Skip;
+        let update_method = Backend::Skip;
         let mut grid = Grid::new(&mut globals.ctx, update_method)
             .unwrap()
             .init_seed(init_b_matrix_vector);
@@ -326,7 +326,7 @@ mod tests {
 
         let mut globals = setup().unwrap();
 
-        let update_method = BackendEngine::Skip;
+        let update_method = Backend::Skip;
         let mut grid = Grid::new(&mut globals.ctx, update_method)
             .unwrap()
             .init_offset(user::get_max_offset_x(), 0.1)
@@ -336,7 +336,7 @@ mod tests {
 
     //#[test]
     //fn test_draw_off_grid_doesnt_panic(){
-    //let mut globals = setup(BackendEngine::Skip).unwrap();
+    //let mut globals = setup(Backend::Skip).unwrap();
 
     //// create modified spritebatch. Note the grid's f_subview will be wrong
     //let image = Image::solid(&mut globals.ctx,CELL_SIZE,BLACK!()).unwrap();

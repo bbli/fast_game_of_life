@@ -8,38 +8,134 @@ use super::b_matrix_vector::*;
 // for globals
 use super::*;
 
-pub enum BackendEngine {
+pub enum Backend {
     Single,
     MultiThreaded(i32),
     Rayon,
     Skip,
 }
 
-// ************  Threading Code  ************
-//(TODO: should probably refactor this and bmatrix_vector.rs into its own folder)
 
-pub struct RegionPool {
-    threadpool: Pool,
-    worker_count: i32,
+pub trait Engine{
+    fn next_b_matrix(&mut self,old_vec:&BMatrixVector, new_vec: &mut BMatrixVector);
 }
-impl RegionPool {
-    pub fn new(worker_count: i32) -> Self {
-        //let threadpool = Arc::new(ThreadPool::new(worker_count as usize));
-        let threadpool = Pool::new(worker_count as u32);
-        RegionPool {
-            threadpool,
-            worker_count,
-        }
+
+pub fn create_engine(update_method: Backend) -> Box<dyn Engine>{
+    use Backend::*;
+    match update_method{
+        Single => Box::new(SingleThreadEngine::new()),
+        MultiThreaded(worker_count) => Box::new(MultiThreadedEngine::new(worker_count)),
+        Rayon => Box::new(RayonEngine::new()),
+        Skip => Box::new(SkipEngine::new())
     }
 }
 
+// ************  Engine Implementations  ************   
+fn get_location_from_idx(idx: usize) -> (i32, i32) {
+    let idx = idx as i32;
+    let i = idx % GRID_SIZE;
+    let j = (idx - i) / GRID_SIZE;
+    (i, j)
+}
+
+struct SingleThreadEngine;
+impl Engine for SingleThreadEngine{
+    fn next_b_matrix(&mut self,old_vec:&BMatrixVector, new_vec: &mut BMatrixVector){
+        for j in 0..GRID_SIZE {
+            for i in 0..GRID_SIZE {
+                let count = life::get_count(i, j,old_vec);
+                let state = old_vec.at(i, j).unwrap();
+                let mut cell_ptr = new_vec.at_mut(i, j).unwrap();
+                *cell_ptr = life::new_cell_value(state, count, old_vec);
+            }
+        }
+    }
+}
+impl SingleThreadEngine{
+    fn new()->Self{
+        SingleThreadEngine{}
+    }
+}
+
+
+struct SkipEngine;
+impl Engine for SkipEngine{
+    fn next_b_matrix(&mut self,old_vec:&BMatrixVector, new_vec: &mut BMatrixVector){
+    }
+}
+impl SkipEngine{
+    fn new()->Self{
+        SkipEngine{}
+    }
+}
+
+
+struct RayonEngine;
+impl Engine for RayonEngine{
+    fn next_b_matrix(&mut self,old_vec:&BMatrixVector, new_vec: &mut BMatrixVector){
+        new_vec
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(idx, cell_ptr)| {
+                let (i, j) = get_location_from_idx(idx);
+                let count = life::get_count(i, j,old_vec);
+                let state = old_vec.at(i, j).unwrap();
+                *cell_ptr = life::new_cell_value(state, count,old_vec);
+            });
+    }
+}
+impl RayonEngine{
+    fn new()->Self{
+        RayonEngine{}
+    }
+}
+
+// ************  Mutli Threading Code  ************
 fn get_num_elems_each_time(vector: &BMatrixVector, worker_count: i32) -> i32 {
     vector.len() as i32 / worker_count
 }
 
-impl RegionPool {
+struct MultiThreadedEngine{
+    threadpool: Pool,
+    worker_count: i32
+}
+impl Engine for MultiThreadedEngine{
+    fn next_b_matrix(&mut self,old_vec:&BMatrixVector, new_vec: &mut BMatrixVector){
+        // ************  MULTITHREADED THREADPOOL  ************
+        // 0. allocate threadpool during Grid::new() DONE
+        // 1. code to partition grid evenly into num_of_threads(also in setup) DONE
+        // 2. start up each thread -> since they have a predefined job
+        // 3. join to wait
+        //
+        // need local variable since closures require unique acess to its borrows
+        let region_iterator = self.create_iter_mut(new_vec);
+        self.threadpool.scoped(|scope| {
+            for (slice, iter_offset) in region_iterator {
+                scope.execute(move || {
+                    for (rel_i, cell_ptr) in slice.iter_mut().enumerate() {
+                        let idx = rel_i + iter_offset as usize;
+                        let (i, j) = get_location_from_idx(idx);
+                        let count = life::get_count(i, j,old_vec);
+                        let state = old_vec.at(i, j).unwrap();
+                        *cell_ptr = life::new_cell_value(state, count,old_vec);
+                    }
+                });
+            }
+            scope.join_all();
+        });
+    }
+}
+impl MultiThreadedEngine {
+    fn new(worker_count: i32) -> Self {
+        //let threadpool = Arc::new(ThreadPool::new(worker_count as usize));
+        let threadpool = Pool::new(worker_count as u32);
+        MultiThreadedEngine {
+            threadpool,
+            worker_count,
+        }
+    }
     // EC: worker_count is 1 -> max_offset should be 0, so edge case is fine too
-    pub fn create_iter_mut<'a>(&mut self, vector: &'a mut BMatrixVector) -> RegionPoolIterMut<'a> {
+    fn create_iter_mut<'a>(&mut self, vector: &'a mut BMatrixVector) -> RegionPoolIterMut<'a> {
         let num_elems_each_time = get_num_elems_each_time(vector, self.worker_count);
 
         let max_offset = num_elems_each_time * (self.worker_count - 1);
@@ -52,13 +148,13 @@ impl RegionPool {
     }
 }
 
+
 struct RegionPoolIterMut<'a> {
     ptr: &'a mut [bool],
     offset: i32,
     num_elems_each_time: i32,
     max_offset: i32,
 }
-
 impl<'a> Iterator for RegionPoolIterMut<'a> {
     type Item = (&'a mut [bool], i32);
 
@@ -99,76 +195,6 @@ impl<'a> Iterator for RegionPoolIterMut<'a> {
             }
         }
     }
-}
-
-impl Deref for RegionPool {
-    type Target = Pool;
-    fn deref(&self) -> &Self::Target {
-        &self.threadpool
-    }
-}
-
-impl DerefMut for RegionPool {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.threadpool
-    }
-}
-
-// ************  Next Code  ************   
-fn get_location_from_idx(idx: usize) -> (i32, i32) {
-    let idx = idx as i32;
-    let i = idx % GRID_SIZE;
-    let j = (idx - i) / GRID_SIZE;
-    (i, j)
-}
-//#[mockable]
-pub fn next_b_matrix(vec: &BMatrixVector, new_vec: &mut BMatrixVector) {
-
-    for j in 0..GRID_SIZE {
-        for i in 0..GRID_SIZE {
-            let count = life::get_count(i, j,vec);
-            let state = vec.at(i, j).unwrap();
-            let mut cell_ptr = new_vec.at_mut(i, j).unwrap();
-            *cell_ptr = life::new_cell_value(state, count, vec);
-        }
-    }
-}
-pub fn next_bmatrix_rayon(vec: &BMatrixVector, new_vec: &mut BMatrixVector){
-    new_vec
-        .par_iter_mut()
-        .enumerate()
-        .for_each(|(idx, cell_ptr)| {
-            let (i, j) = get_location_from_idx(idx);
-            let count = life::get_count(i, j,vec);
-            let state = vec.at(i, j).unwrap();
-            *cell_ptr = life::new_cell_value(state, count,vec);
-        });
-}
-
-//#[mockable]
-pub fn next_b_matrix_threadpool(vec: &BMatrixVector, new_vec: &mut BMatrixVector, region_pool: &mut RegionPool){
-    // ************  MULTITHREADED THREADPOOL  ************
-    // 0. allocate threadpool during Grid::new() DONE
-    // 1. code to partition grid evenly into num_of_threads(also in setup) DONE
-    // 2. start up each thread -> since they have a predefined job
-    // 3. join to wait
-    //
-    // need local variable since closures require unique acess to its borrows
-    let region_iterator = region_pool.create_iter_mut(new_vec);
-    region_pool.scoped(|scope| {
-        for (slice, iter_offset) in region_iterator {
-            scope.execute(move || {
-                for (rel_i, cell_ptr) in slice.iter_mut().enumerate() {
-                    let idx = rel_i + iter_offset as usize;
-                    let (i, j) = get_location_from_idx(idx);
-                    let count = life::get_count(i, j,vec);
-                    let state = vec.at(i, j).unwrap();
-                    *cell_ptr = life::new_cell_value(state, count,vec);
-                }
-            });
-        }
-        scope.join_all();
-    });
 }
 
 
@@ -245,7 +271,7 @@ mod tests {
     #[test]
     fn test_RegionPoolIterMut_next_edge_case() {
         let worker_count = 1;
-        let mut region_pool = RegionPool::new(worker_count);
+        let mut region_pool = MultiThreadedEngine::new(worker_count);
         let bool_vec = vec![true, true, true, false, false, false, false];
 
         let test_vec = bool_vec.clone();
@@ -262,7 +288,7 @@ mod tests {
     #[test]
     fn test_RegionPoolIterMut_step_through_next() {
         let worker_count = 3;
-        let mut region_pool = RegionPool::new(worker_count);
+        let mut region_pool = MultiThreadedEngine::new(worker_count);
         let mut vec =
             BMatrixVector::new_for_test(vec![true, true, true, false, false, false, false]);
         let mut region_iterator = region_pool.create_iter_mut(&mut vec);
@@ -305,7 +331,7 @@ mod tests {
         *b_matrix_vector.at_mut(i, j).unwrap() = true;
         assert_eq!(b_matrix_vector.at(i, j).unwrap(), true);
         let mut next_b_matrix_vector = BMatrixVector::default();
-        engine::next_b_matrix(&b_matrix_vector,&mut next_b_matrix_vector);
+        SingleThreadEngine::new().next_b_matrix(&b_matrix_vector,&mut next_b_matrix_vector);
 
         assert_eq!(next_b_matrix_vector.at(i, j).unwrap(), false);
     }
@@ -322,7 +348,7 @@ mod tests {
         *b_matrix_vector.at_mut(i, j - 1).unwrap() = true;
 
         let mut next_b_matrix_vector = BMatrixVector::default();
-        engine::next_b_matrix(&b_matrix_vector,&mut next_b_matrix_vector);
+        SingleThreadEngine::new().next_b_matrix(&b_matrix_vector,&mut next_b_matrix_vector);
 
         assert_eq!(next_b_matrix_vector.at(i, j + 1).unwrap(), false);
         assert_eq!(next_b_matrix_vector.at(i - 1, j).unwrap(), true);
@@ -340,7 +366,7 @@ mod tests {
         *b_matrix_vector.at_mut(i, j).unwrap() = true;
 
         let mut next_b_matrix_vector = BMatrixVector::default();
-        engine::next_b_matrix(&b_matrix_vector,&mut next_b_matrix_vector);
+        SingleThreadEngine::new().next_b_matrix(&b_matrix_vector,&mut next_b_matrix_vector);
 
         assert_eq!(next_b_matrix_vector.at(i, j).unwrap(), true);
         assert_eq!(next_b_matrix_vector.at(i, j - 1).unwrap(), true);
@@ -394,8 +420,8 @@ mod tests {
         //let init_b_matrix_vector = patterns::PatternBuilder::new()
             //.make_random((0, 0), GRID_SIZE, GRID_SIZE)
             //.build();
-        //let update_method = BackendEngine::MultiThreaded(500);
-        ////let update_method = BackendEngine::Rayon;
+        //let update_method = Backend::MultiThreaded(500);
+        ////let update_method = Backend::Rayon;
         //let mut grid = Grid::new(&mut globals.ctx, update_method)
             //.unwrap()
             //.init_seed(init_b_matrix_vector);

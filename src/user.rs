@@ -317,7 +317,7 @@ mod tests {
         // ************  RUNNING  ************
         let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
         graphics::set_blend_mode(ctx, BlendMode::Replace);
-        let update_method = BackendEngine::Rayon;
+        let update_method = Backend::Rayon;
         let ref mut state = Grid::new(ctx, update_method)
             .unwrap()
             .init_seed(init_b_matrix_vector)
@@ -345,7 +345,7 @@ mod tests {
         // ************  RUNNING  ************
         let (ref mut ctx, ref mut event_loop) = cb.build().unwrap();
         graphics::set_blend_mode(ctx, BlendMode::Replace);
-        let update_method = BackendEngine::Rayon;
+        let update_method = Backend::Rayon;
         let ref mut state = Grid::new(ctx, update_method)
             .unwrap()
             .init_seed(init_b_matrix_vector);

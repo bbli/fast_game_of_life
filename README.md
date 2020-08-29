@@ -8,7 +8,7 @@
 * Default runs on 2000 by 2000 grid(modfiy `GRID_SIZE` global variable to change)
 * Can use arrow keys to move around the grid, as 2000 cells probably will not fit on your computer screen(modify `WINDOW_WIDTH` and `WINDOW_HEIGHT` globals to change to screen of your monitor)
 * Some predefined patterns(look in `src/patterns.rs`) for more details
-* Can choose run of number of threads of your choosing(`BackendEngine::MultiThreaded(num_threads)`) or just have program figure it out by using the [rayon](https://github.com/rayon-rs/rayon) data parallelism library(`BackendEngine::Rayon`)
+* Can choose run of number of threads of your choosing(`Backend::MultiThreaded(num_threads)`) or just have program figure it out by using the [rayon](https://github.com/rayon-rs/rayon) data parallelism library(`Backend::Rayon`)
 
 * See example below for more details
 
@@ -41,9 +41,9 @@ pub fn main() -> GameResult {
     // default offset start at (0,0), but can change if you want
     // Note these numbers must be positive or will panic
     let origin_point = 0.1 as f32;
-    //let update_method = BackendEngine::MultiThreaded(8);
-    //let update_method = BackendEngine::Single;
-    let update_method = BackendEngine::Rayon;
+    //let update_method = Backend::MultiThreaded(8);
+    //let update_method = Backend::Single;
+    let update_method = Backend::Rayon;
     let ref mut state = Grid::new(ctx,update_method)?
         .init_seed(init_b_matrix_vector)
         .init_offset(origin_point,origin_point);

@@ -37,7 +37,7 @@ pub struct BMatrix {
 }
 
 impl BMatrix {
-    pub fn new(update_method: BackendEngine) -> Self {
+    pub fn new(update_method: Backend) -> Self {
         let vec = MyArcRwLock::new(BMatrixVector::default());
         let vec2 = vec.clone();
         let new_vec = MyArcMut::new(BMatrixVector::default());
@@ -87,34 +87,19 @@ impl BMatrix {
 struct MainWorker{
     new_vec: MyArcMut<BMatrixVector>,
     vec: MyArcRwLock<BMatrixVector>,
-    region_pool: RegionPool,
-    update_method: BackendEngine,
-    status: MyArcMut<WorkFlag>
+    status: MyArcMut<WorkFlag>,
+    update_engine: Box<dyn Engine>
 }
 impl MainWorker{
-    fn new(update_method: BackendEngine, status: MyArcMut<WorkFlag>, new_vec: MyArcMut<BMatrixVector>, vec: MyArcRwLock<BMatrixVector>)->Self{
-        use BackendEngine::*;
-        // NOTE: using new match ergonomics
-        let region_pool = match &update_method {
-            Single | Rayon | Skip => RegionPool::new(1),
-            MultiThreaded(x) => RegionPool::new(*x),
-        };
+    fn new(update_method: Backend, status: MyArcMut<WorkFlag>, new_vec: MyArcMut<BMatrixVector>, vec: MyArcRwLock<BMatrixVector>)->Self{
+        let update_engine = engine::create_engine(update_method);
         MainWorker{
             new_vec,
             vec,
-            region_pool,
-            update_method,
-            status
+            status,
+            update_engine
         }
     }
-
-    //fn get_new_results(&self) -> BMatrixVector{
-        ////BMatrixVector(self.new_vec.clone())
-    //}
-    //fn get_new_status(&self) -> WorkFlag{
-        //self.status
-    //}
-
     fn wait(&self){
         thread::park();
     }
@@ -129,9 +114,7 @@ impl MainWorker{
             self.status.set(WorkFlag::Done);
         }
     }
-
     fn backendMethodDispatch(&mut self) {
-        use BackendEngine::*;
         // so I can temporarily bypass arc + mutex restrictions
         // for multi-threading purposes
         let mut new_vec_lock = self.new_vec.grab_lock();
@@ -139,20 +122,8 @@ impl MainWorker{
 
         let vec_lock = self.vec.grab_reader_lock();
         let vec_raw = vec_lock.deref();
-        match &self.update_method {
-            Single => {
-                //new_vec = new_vec.next_b_matrix();
-                engine::next_b_matrix(vec_raw,new_vec_raw);
-            }
-            Rayon => {
-                engine::next_bmatrix_rayon(vec_raw,new_vec_raw);
-            }
-            MultiThreaded(_worker_count) => {
-                let region_pool = &mut self.region_pool;
-                engine::next_b_matrix_threadpool(vec_raw,new_vec_raw,region_pool);
-            }
-            Skip => {}
-        }
+
+        self.update_engine.next_b_matrix(vec_raw,new_vec_raw);
     }
 }
 
