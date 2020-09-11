@@ -44,11 +44,10 @@ ggez="*"
 nalgebra="*"
 rand="*"
 assert_approx_eq="*"
-mocktopus="*"
 rayon="*"
-#threadpool="*"
 scoped_threadpool="*"
-#semka="*"
+# comment this out when you are done with project
+#mocktopus="*"
 
 #[target.x86_64-unknown-linux-gnu]
 #rustflags = [

@@ -197,7 +197,7 @@ impl<'a> Iterator for RegionPoolIterMut<'a> {
     }
 }
 
-
+// ************  GAME OF LIFE RULES  ************   
 mod life {
     use super::*;
     pub fn convert_bool(i: i32, j: i32, b_matrix_vector: &BMatrixVector) -> u32 {

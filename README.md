@@ -5,7 +5,7 @@
 ## Description
 ![cgol](cgol.gif)
 * Conway's Game of Life implemented using [ggez](https://github.com/ggez/ggez)
-* Default runs on 2000 by 2000 cell grid(modfiy `GRID_SIZE` global variable to change number of cells, and `WINDOW_WIDTH` and `WINDOW_HEIGHT` globals to change size of view)
+* Default runs on 10000 by 10000 cell grid(modfiy `GRID_SIZE` global variable to change number of cells, and `WINDOW_WIDTH` and `WINDOW_HEIGHT` globals to change size of view)
     * Number of cells is probably bigger than your computer screen. For reference, on my 1920 wide laptop, it will fit about 82 cells across
     * ... which is why you can use arrow keys to move around the grid!
     * Furtheremore, movement is asynchronous, so you can fly around the screen :).

@@ -6,7 +6,6 @@ version = "0.1.0"
 dependencies = [
  "assert_approx_eq",
  "ggez",
- "mocktopus",
  "nalgebra",
  "rand 0.7.3",
  "rayon",
@@ -1200,26 +1199,6 @@ name = "mint"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d42e54f364a39ad5238e3072db2e8747785b37655368da756987d3b09ada91e0"
-
-[[package]]
-name = "mocktopus"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bb802d95931d1426546328523487423c2bd44e0fca457d4ac063ec3150a681f"
-dependencies = [
- "mocktopus_macros",
-]
-
-[[package]]
-name = "mocktopus_macros"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "757ebe7dc317c368dba9dcc319266416e48272292ed86814478f66308119c2e9"
-dependencies = [
- "proc-macro2 1.0.19",
- "quote 1.0.7",
- "syn 1.0.35",
-]
 
 [[package]]
 name = "nalgebra"
