@@ -34,7 +34,8 @@ pub fn create_engine(update_method: Backend) -> Box<dyn Engine>{
 fn get_location_from_idx(idx: usize) -> (i32, i32) {
     let idx = idx as i32;
     let i = idx % GRID_SIZE;
-    let j = (idx - i) / GRID_SIZE;
+    //let j = (idx - i) / GRID_SIZE;
+    let j = idx /GRID_SIZE;
     (i, j)
 }
 
